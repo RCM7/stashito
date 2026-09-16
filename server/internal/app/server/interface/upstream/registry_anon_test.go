@@ -119,7 +119,7 @@ func TestGetBlobStreams(t *testing.T) {
 		if r.URL.Path != "/v2/library/alpine/blobs/sha256:abc" {
 			t.Errorf("path = %q", r.URL.Path)
 		}
-		w.Write(data)
+		_, _ = w.Write(data)
 	}))
 	defer srv.Close()
 

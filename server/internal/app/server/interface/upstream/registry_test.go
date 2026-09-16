@@ -102,7 +102,7 @@ func bearerRegistry(t *testing.T, expectBasicUser, expectBasicPass string) (*htt
 		if got := r.URL.Query().Get("scope"); got != "repository:library/postgres:pull" {
 			t.Errorf("token scope = %q", got)
 		}
-		json.NewEncoder(w).Encode(map[string]any{"token": "tok123", "expires_in": 300})
+		_ = json.NewEncoder(w).Encode(map[string]any{"token": "tok123", "expires_in": 300})
 	})
 
 	mux.HandleFunc("/v2/library/postgres/manifests/latest", func(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +115,7 @@ func bearerRegistry(t *testing.T, expectBasicUser, expectBasicPass string) (*htt
 		}
 		w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
 		w.Header().Set("Docker-Content-Digest", "sha256:abc")
-		w.Write([]byte(`{"schemaVersion":2}`))
+		_, _ = w.Write([]byte(`{"schemaVersion":2}`))
 	})
 
 	srv = httptest.NewServer(mux)
@@ -186,7 +186,7 @@ func TestBasicAuthFlow(t *testing.T) {
 			return
 		}
 		w.Header().Set("Docker-Content-Digest", "sha256:def")
-		w.Write([]byte(`{"schemaVersion":2}`))
+		_, _ = w.Write([]byte(`{"schemaVersion":2}`))
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)

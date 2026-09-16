@@ -239,7 +239,7 @@ func (g *RegistryGateway) doRegistryRequest(ctx context.Context, method string, 
 	}
 
 	header := resp.Header.Get("WWW-Authenticate")
-	io.Copy(io.Discard, resp.Body)
+	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 
 	c, err := parseChallenge(header)

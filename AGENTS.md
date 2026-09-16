@@ -92,6 +92,7 @@ Go server, Clean Architecture. Always use Makefile targets from the repo root:
 make build-local     # Build server binary
 make run-local       # Run server (with .env)
 make test            # Run all tests
+make lint            # golangci-lint via docker
 make build           # Docker build
 make push            # Push Docker image
 ```

@@ -2,7 +2,7 @@ DOCKER_REPOSITORY=rcm7/stashito
 PLATFORM ?= amd64
 DOCKER_TAG := latest
 
-.PHONY: build push build-local run-local test
+.PHONY: build push build-local run-local test lint
 
 build:
 	docker build -f docker/Dockerfile --platform linux/${PLATFORM} -t ${DOCKER_REPOSITORY}:${DOCKER_TAG} .
@@ -18,3 +18,6 @@ run-local:
 
 test:
 	go test ./...
+
+lint:
+	docker run --rm -v $(CURDIR):/app -w /app golangci/golangci-lint:v2.13-alpine golangci-lint run ./...

@@ -64,7 +64,7 @@ func (c *StorageCollector) Collect(ch chan<- prometheus.Metric) {
 }
 
 func scan(root string) (bytes, blobs, manifests float64) {
-	filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil
 		}

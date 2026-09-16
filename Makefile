@@ -23,3 +23,6 @@ run-local:
 
 test:
 	make -C server/ test
+
+lint:
+	make -C server/ lint

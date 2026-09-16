@@ -45,7 +45,7 @@ func (f *fakeUpstream) GetBlob(ctx context.Context, registryHost string, reposit
 	f.getBlobCalls++
 	if f.getBlobErr != nil {
 		// Simulate a partial download before the failure
-		dest.Write([]byte("partial-"))
+		_, _ = dest.Write([]byte("partial-"))
 		return 0, f.getBlobErr
 	}
 	n, err := dest.Write(f.blobData)
