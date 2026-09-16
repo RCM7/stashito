@@ -1,0 +1,19 @@
+services:
+  stashito:
+    build:
+      context: server/
+      dockerfile: docker/Dockerfile
+    environment:
+      PORT: "8080"
+      STORAGE_PATH: "/data/stashito"
+      LOG_LEVEL: "debug"
+      LOG_FORMAT: "text"
+      UPSTREAM_DOCKERHUB_HOST: "registry-1.docker.io"
+      TAG_TTL: "60s"
+    volumes:
+      - stashito_data:/data/stashito
+    ports:
+      - "8080:8080"
+
+volumes:
+  stashito_data:
