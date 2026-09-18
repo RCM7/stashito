@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -17,6 +18,24 @@ type Upstream struct {
 // HasCredentials reports whether this upstream has basic credentials configured.
 func (u Upstream) HasCredentials() bool {
 	return u.Username != ""
+}
+
+var ecrHostPattern = regexp.MustCompile(`^\d+\.dkr\.ecr(-fips)?\.([a-z0-9-]+)\.amazonaws\.com(\.cn)?$`)
+
+// IsECR reports whether this upstream is a private AWS ECR registry, detected
+// from its host.
+func (u Upstream) IsECR() bool {
+	return ecrHostPattern.MatchString(u.Host)
+}
+
+// ECRRegion returns the AWS region embedded in an ECR host, or "" when the
+// host is not an ECR registry.
+func (u Upstream) ECRRegion() string {
+	m := ecrHostPattern.FindStringSubmatch(u.Host)
+	if m == nil {
+		return ""
+	}
+	return m[2]
 }
 
 // Registries maps a registry alias (e.g. "dockerhub") to its upstream config.

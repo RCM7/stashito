@@ -40,3 +40,28 @@ func TestRegistriesResolveUnknown(t *testing.T) {
 		t.Error("Resolve(\"ghcr\") = nil error, want error")
 	}
 }
+
+func TestUpstreamIsECR(t *testing.T) {
+	cases := []struct {
+		host   string
+		isECR  bool
+		region string
+	}{
+		{"123456789012.dkr.ecr.eu-west-1.amazonaws.com", true, "eu-west-1"},
+		{"123456789012.dkr.ecr-fips.us-gov-west-1.amazonaws.com", true, "us-gov-west-1"},
+		{"123456789012.dkr.ecr.cn-north-1.amazonaws.com.cn", true, "cn-north-1"},
+		{"registry-1.docker.io", false, ""},
+		{"public.ecr.aws", false, ""},
+		{"ghcr.io", false, ""},
+		{"123456789012.dkr.ecr.eu-west-1.amazonaws.com.evil.example", false, ""},
+	}
+	for _, tc := range cases {
+		u := Upstream{Host: tc.host}
+		if got := u.IsECR(); got != tc.isECR {
+			t.Errorf("IsECR(%q) = %v, want %v", tc.host, got, tc.isECR)
+		}
+		if got := u.ECRRegion(); got != tc.region {
+			t.Errorf("ECRRegion(%q) = %q, want %q", tc.host, got, tc.region)
+		}
+	}
+}

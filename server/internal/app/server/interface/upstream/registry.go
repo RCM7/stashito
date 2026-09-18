@@ -48,6 +48,7 @@ type RegistryGateway struct {
 	scheme     string                     // "https"; overridable in tests
 	tokenCache map[string]tokenEntry      // host+"/"+repository -> bearer token
 	basicHosts map[string]bool            // hosts that use Basic auth directly
+	ecrCreds   *ecrCredentials
 	mu         sync.RWMutex
 }
 
@@ -60,25 +61,54 @@ func NewRegistryGateway(upstreams map[string]entity.Upstream) *RegistryGateway {
 		scheme:     "https",
 		tokenCache: make(map[string]tokenEntry),
 		basicHosts: make(map[string]bool),
+		ecrCreds:   newECRCredentials(),
 	}
 }
 
-// cachedAuth returns the auth to apply proactively, if any is known for this
-// host/repository: a valid bearer token, or basic credentials for hosts that
-// answered a Basic challenge before.
-func (g *RegistryGateway) applyCachedAuth(req *http.Request, registryHost string, repository string) {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
-
-	if entry, ok := g.tokenCache[registryHost+"/"+repository]; ok && time.Now().Before(entry.expiresAt) {
-		req.Header.Set("Authorization", "Bearer "+entry.token)
-		return
+// credentialsFor resolves the basic credentials for an upstream host: the
+// rotating ECR authorization token for ECR hosts, the configured static pair
+// otherwise. ok is false when the host has no credentials.
+func (g *RegistryGateway) credentialsFor(ctx context.Context, registryHost string) (username string, password string, ok bool, err error) {
+	up, found := g.upstreams[registryHost]
+	if !found {
+		return "", "", false, nil
 	}
-	if g.basicHosts[registryHost] {
-		if up, ok := g.upstreams[registryHost]; ok && up.HasCredentials() {
-			req.SetBasicAuth(up.Username, up.Password)
+	if up.IsECR() {
+		username, password, err = g.ecrCreds.get(ctx, up)
+		if err != nil {
+			return "", "", false, err
+		}
+		return username, password, true, nil
+	}
+	if !up.HasCredentials() {
+		return "", "", false, nil
+	}
+	return up.Username, up.Password, true, nil
+}
+
+// applyCachedAuth applies the auth known for this host/repository proactively:
+// a valid bearer token, or basic credentials for hosts that answered a Basic
+// challenge before.
+func (g *RegistryGateway) applyCachedAuth(ctx context.Context, req *http.Request, registryHost string, repository string) error {
+	g.mu.RLock()
+	entry, hasToken := g.tokenCache[registryHost+"/"+repository]
+	basic := g.basicHosts[registryHost]
+	g.mu.RUnlock()
+
+	if hasToken && time.Now().Before(entry.expiresAt) {
+		req.Header.Set("Authorization", "Bearer "+entry.token)
+		return nil
+	}
+	if basic {
+		username, password, ok, err := g.credentialsFor(ctx, registryHost)
+		if err != nil {
+			return err
+		}
+		if ok {
+			req.SetBasicAuth(username, password)
 		}
 	}
+	return nil
 }
 
 // challenge holds a parsed WWW-Authenticate header.
@@ -168,8 +198,12 @@ func (g *RegistryGateway) fetchToken(ctx context.Context, c challenge, registryH
 		return "", fmt.Errorf("creating token request: %w", err)
 	}
 
-	if up, ok := g.upstreams[registryHost]; ok && up.HasCredentials() {
-		req.SetBasicAuth(up.Username, up.Password)
+	username, password, hasCreds, err := g.credentialsFor(ctx, registryHost)
+	if err != nil {
+		return "", err
+	}
+	if hasCreds {
+		req.SetBasicAuth(username, password)
 	}
 
 	resp, err := g.httpClient.Do(req)
@@ -228,7 +262,9 @@ func (g *RegistryGateway) doRegistryRequest(ctx context.Context, method string, 
 	if err != nil {
 		return nil, err
 	}
-	g.applyCachedAuth(req, registryHost, repository)
+	if err := g.applyCachedAuth(ctx, req, registryHost, repository); err != nil {
+		return nil, err
+	}
 
 	resp, err := g.doMeasured(req, registryHost)
 	if err != nil {
@@ -260,11 +296,14 @@ func (g *RegistryGateway) doRegistryRequest(ctx context.Context, method string, 
 		}
 		retry.Header.Set("Authorization", "Bearer "+token)
 	case "basic":
-		up, ok := g.upstreams[registryHost]
-		if !ok || !up.HasCredentials() {
+		username, password, hasCreds, err := g.credentialsFor(ctx, registryHost)
+		if err != nil {
+			return nil, err
+		}
+		if !hasCreds {
 			return nil, fmt.Errorf("upstream %s requires basic auth but no credentials are configured", registryHost)
 		}
-		retry.SetBasicAuth(up.Username, up.Password)
+		retry.SetBasicAuth(username, password)
 		g.mu.Lock()
 		g.basicHosts[registryHost] = true
 		g.mu.Unlock()
