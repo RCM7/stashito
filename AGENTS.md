@@ -2,9 +2,9 @@
 
 Pull-through cache for Docker/OCI images. A caching registry proxy: implements
 the OCI Distribution Spec, sits between clients and upstream registries
-(Docker Hub, GHCR, Quay, Google Artifact Registry, Azure ACR), stores every
-manifest and blob it fetches on local disk, and serves later pulls from that
-cache. Ships as the Docker image `rcm7/stashito`.
+(Docker Hub, GHCR, Quay, Google Artifact Registry, Azure ACR, AWS ECR),
+stores every manifest and blob it fetches on local disk, and serves later
+pulls from that cache. Ships as the Docker image `rcm7/stashito`.
 
 ## Run
 
@@ -50,11 +50,15 @@ All env vars are required unless marked optional. There are no other defaults.
 | `LOG_FORMAT` | `text` or `json` (structured logs for machine parsing) |
 | `TAG_TTL` | Go duration (e.g. `60s`). Tag manifests are served from cache without upstream revalidation within this window; after it expires the next request revalidates via upstream HEAD (digest compare). Digest manifests and blobs are immutable and never revalidated. |
 | `UPSTREAM_<ALIAS>_HOST` | One per upstream registry host (e.g. `registry-1.docker.io`). At least one required. |
-| `UPSTREAM_<ALIAS>_USERNAME` / `_PASSWORD` | Optional basic-auth pair for private upstreams. Docker Hub / GHCR / Quay: username + PAT or robot token. GAR: `_json_key` + service account JSON. ACR: service principal id + secret. |
+| `UPSTREAM_<ALIAS>_USERNAME` / `_PASSWORD` | Optional basic-auth pair for private upstreams. Docker Hub / GHCR / Quay: username + PAT or robot token. GAR: `_json_key` + service account JSON. ACR: service principal id + secret. ECR: AWS access key id + secret access key. |
 | `METRICS_ENABLED` | Optional, default `false`. `true` exposes Prometheus metrics at `GET /metrics` (`stashito_` prefix). |
 | `METRICS_PORT` | Optional. Serve `/metrics` on this separate port; 0/unset serves it on `PORT`. |
 
-AWS ECR is not supported yet (rotating credentials).
+AWS ECR hosts (`<account>.dkr.ecr.<region>.amazonaws.com`, including FIPS
+and China variants) are detected automatically: the rotating ECR
+authorization token is fetched via `ecr:GetAuthorizationToken` and refreshed
+before its 12-hour expiry. Credentials unset means the AWS default
+credential chain (env vars, shared config, IAM role, IRSA).
 
 ## Behavior
 
