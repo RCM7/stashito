@@ -25,6 +25,11 @@ import (
 func RunRouter(c *config.Config) error {
 	// Initialize storage and upstream
 	cacheRepo := fs.NewCacheRepository(c.StoragePath)
+	if c.MaxStorage > 0 {
+		if err := cacheRepo.SetMaxStorage(int64(c.MaxStorage)); err != nil {
+			return err
+		}
+	}
 	registry := upstream.NewRegistryGateway(c.Upstreams.ByHost())
 
 	// Build interactors

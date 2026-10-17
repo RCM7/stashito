@@ -1,8 +1,10 @@
 package entity
 
-// CachedBlob represents a cached blob on the filesystem.
+import "io"
+
+// CachedBlob is a cached blob opened for streaming. The caller must Close Content.
 type CachedBlob struct {
-	Digest string
-	Size   int64
-	Path   string // filesystem path for streaming
+	Digest  string
+	Size    int64
+	Content io.ReadSeekCloser
 }

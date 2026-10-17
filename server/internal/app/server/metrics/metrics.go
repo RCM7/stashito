@@ -36,6 +36,21 @@ var (
 		Name: "stashito_upstream_errors_total",
 		Help: "Upstream registry requests that failed before receiving a response, by registry host.",
 	}, []string{"registry"})
+
+	Evictions = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "stashito_evictions_total",
+		Help: "Cache entries evicted to stay under MAX_STORAGE, by content type.",
+	}, []string{"type"})
+
+	EvictedBytes = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "stashito_evicted_bytes_total",
+		Help: "Bytes removed from the cache by eviction.",
+	})
+
+	StorageMaxBytes = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "stashito_storage_max_bytes",
+		Help: "Configured MAX_STORAGE in bytes; 0 when unlimited.",
+	})
 )
 
 func CacheHit(contentType string) {

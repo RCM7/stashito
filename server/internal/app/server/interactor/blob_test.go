@@ -2,7 +2,7 @@ package interactor
 
 import (
 	"context"
-	"os"
+	"io"
 	"testing"
 
 	"github.com/RCM7/stashito/server/internal/app/server/interface/storage/fs"
@@ -20,9 +20,10 @@ func TestGetBlobFetchesAndCaches(t *testing.T) {
 	if blob.Size != int64(len("layer-data")) {
 		t.Errorf("size = %d, want %d", blob.Size, len("layer-data"))
 	}
-	data, err := os.ReadFile(blob.Path)
+	defer blob.Content.Close()
+	data, err := io.ReadAll(blob.Content)
 	if err != nil {
-		t.Fatalf("reading blob file: %v", err)
+		t.Fatalf("reading blob content: %v", err)
 	}
 	if string(data) != "layer-data" {
 		t.Errorf("blob content = %q, want %q", data, "layer-data")
@@ -58,9 +59,10 @@ func TestGetBlobUpstreamErrorLeavesNoPartialBlob(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetBlob retry: %v", err)
 	}
-	data, err := os.ReadFile(blob.Path)
+	defer blob.Content.Close()
+	data, err := io.ReadAll(blob.Content)
 	if err != nil {
-		t.Fatalf("reading blob file: %v", err)
+		t.Fatalf("reading blob content: %v", err)
 	}
 	if string(data) != "layer-data" {
 		t.Errorf("blob content after retry = %q, want %q", data, "layer-data")

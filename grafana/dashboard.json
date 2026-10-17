@@ -202,9 +202,21 @@
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
       "targets": [
-        { "refId": "A", "expr": "stashito_storage_bytes", "legendFormat": "bytes" }
+        { "refId": "A", "expr": "stashito_storage_bytes", "legendFormat": "bytes" },
+        { "refId": "B", "expr": "stashito_storage_max_bytes > 0", "legendFormat": "cap" }
       ],
-      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": { "unit": "bytes" },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "cap" },
+            "properties": [
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } },
+              { "id": "custom.fillOpacity", "value": 0 }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

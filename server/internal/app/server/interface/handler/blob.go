@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -35,10 +36,11 @@ func (h *BlobHandler) Get(ctx *gin.Context, name string, digest string) {
 		return
 	}
 
+	defer blob.Content.Close()
 	ctx.Header("Docker-Content-Digest", blob.Digest)
-	ctx.Header("Content-Length", fmt.Sprintf("%d", blob.Size))
 	ctx.Header("Docker-Distribution-API-Version", "registry/2.0")
-	ctx.File(blob.Path)
+	ctx.Header("Content-Type", "application/octet-stream")
+	http.ServeContent(ctx.Writer, ctx.Request, "", time.Time{}, blob.Content)
 }
 
 func (h *BlobHandler) Head(ctx *gin.Context, name string, digest string) {

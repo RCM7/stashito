@@ -48,13 +48,14 @@ registries). Everything after it is the ordinary image path.
 AWS ECR hosts are detected automatically; stashito fetches and rotates the
 ECR authorization token itself, using `_USERNAME` / `_PASSWORD` as AWS
 access keys or, when unset, the AWS default credential chain (IAM role,
-IRSA).
+IRSA). Set `MAX_STORAGE` (e.g. `50GB`) to cap the cache: least recently
+pulled layers are evicted inline so disk use never exceeds it.
 
 ## Metrics
 
 Optional Prometheus metrics: set `METRICS_ENABLED=true` to expose
 `GET /metrics` — cache hits and misses, upstream requests, HTTP latency,
-storage size. `METRICS_PORT` serves them on a separate port. A ready-made
+storage size and evictions. `METRICS_PORT` serves them on a separate port. A ready-made
 Grafana dashboard ships in the repo.
 
 ## License
