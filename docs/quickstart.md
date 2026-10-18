@@ -36,6 +36,10 @@ docker run -d --name stashito -p 8080:8080 \
   rcm7/stashito
 ```
 
+The image is published for `linux/amd64`, `linux/arm64`, `linux/arm/v7`,
+`linux/arm/v6`, `linux/386`, `linux/ppc64le`, `linux/s390x` and
+`linux/riscv64`; docker picks the one matching the host.
+
 All variables are required unless marked optional in
 [configuration](/configuration) — if something is missing or mistyped,
 Stashito tells you at startup instead of guessing.
