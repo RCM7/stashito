@@ -222,10 +222,59 @@ func (e *evictor) release(written int64) {
 	e.mu.Unlock()
 }
 
+// makeRoom evicts ahead of a download whose size is known, so the cap is
+// met before the first byte lands instead of chunk by chunk.
+func (e *evictor) makeRoom(size int64) {
+	if e == nil || size > e.max {
+		return
+	}
+	e.mu.Lock()
+	victims := e.popWhileLocked(func() bool { return e.used+e.inflight+size > e.max })
+	used, inflight := e.used, e.inflight
+	e.mu.Unlock()
+	e.deleteVictims(victims, used, inflight)
+}
+
+// freeDisk evicts one entry at a time until the filesystem under dir has at
+// least need bytes free, or nothing is left to evict. Returns the free bytes
+// measured last.
+func (e *evictor) freeDisk(dir string, need int64) int64 {
+	free, _ := diskFree(dir)
+	if e == nil {
+		return free
+	}
+	for free < need {
+		popped := false
+		e.mu.Lock()
+		victims := e.popWhileLocked(func() bool {
+			if popped {
+				return false
+			}
+			popped = true
+			return true
+		})
+		used, inflight := e.used, e.inflight
+		e.mu.Unlock()
+		if len(victims) == 0 {
+			return free
+		}
+		e.deleteVictims(victims, used, inflight)
+		free, _ = diskFree(dir)
+	}
+	return free
+}
+
 func (e *evictor) evictIfNeeded() {
 	e.mu.Lock()
+	victims := e.popWhileLocked(func() bool { return e.used+e.inflight > e.max })
+	used, inflight := e.used, e.inflight
+	e.mu.Unlock()
+	e.deleteVictims(victims, used, inflight)
+}
+
+func (e *evictor) popWhileLocked(more func() bool) []*entry {
 	var victims []*entry
-	for e.used+e.inflight > e.max && e.lru.Len() > 0 {
+	for e.lru.Len() > 0 && more() {
 		el := e.lru.Back()
 		en := el.Value.(*entry)
 		e.lru.Remove(el)
@@ -233,8 +282,10 @@ func (e *evictor) evictIfNeeded() {
 		e.used -= en.size
 		victims = append(victims, en)
 	}
-	used, inflight := e.used, e.inflight
-	e.mu.Unlock()
+	return victims
+}
+
+func (e *evictor) deleteVictims(victims []*entry, used, inflight int64) {
 	if len(victims) == 0 {
 		return
 	}

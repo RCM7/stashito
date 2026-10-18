@@ -43,6 +43,10 @@ func ParseByteSize(s string) (ByteSize, error) {
 }
 
 func (b *ByteSize) EnvDecode(val string) error {
+	if strings.TrimSpace(val) == "" {
+		*b = 0
+		return nil
+	}
 	parsed, err := ParseByteSize(val)
 	if err != nil {
 		return err

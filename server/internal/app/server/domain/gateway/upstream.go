@@ -19,3 +19,10 @@ type UpstreamGateway interface {
 	// Returns the number of bytes written.
 	GetBlob(ctx context.Context, registryHost string, repository string, digest string, dest io.Writer) (int64, error)
 }
+
+// SizeReserver is implemented by blob destinations that want the upstream
+// Content-Length before the first byte is written, so they can make room or
+// refuse the blob.
+type SizeReserver interface {
+	ReserveSize(size int64) error
+}

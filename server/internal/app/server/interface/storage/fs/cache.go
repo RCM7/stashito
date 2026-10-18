@@ -201,6 +201,27 @@ type atomicBlobWriter struct {
 	oversized bool
 }
 
+var diskFree = statfsFree
+
+// ReserveSize runs before the first byte of a download: evicts to make room
+// when a cap is set, then refuses the blob if the filesystem still cannot
+// hold it, so a pull can never fill the disk.
+func (w *atomicBlobWriter) ReserveSize(size int64) error {
+	dir := filepath.Dir(w.finalPath)
+	w.evictor.makeRoom(size)
+	free, ok := diskFree(dir)
+	if !ok {
+		return nil
+	}
+	if free < size {
+		free = w.evictor.freeDisk(dir, size)
+	}
+	if free < size {
+		return fmt.Errorf("%w: blob needs %d bytes, %d bytes free under %s", entity.ErrInsufficientStorage, size, free, dir)
+	}
+	return nil
+}
+
 func (w *atomicBlobWriter) Write(p []byte) (int, error) {
 	n, err := w.tmpFile.Write(p)
 	if n > 0 && !w.oversized {

@@ -66,6 +66,8 @@ upstreams and storage writability as JSON.
 The cache grows without bound unless you set `MAX_STORAGE` (e.g. `50GB`,
 `2TB`). With a cap, the least recently pulled manifests and blobs are
 evicted inline as new ones are written, so disk use never exceeds it.
+Either way a blob that does not fit in the filesystem's free space is
+refused with `507 Insufficient Storage` instead of filling the disk.
 
 ## Metrics
 

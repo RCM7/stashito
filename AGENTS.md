@@ -71,6 +71,11 @@ credential chain (env vars, shared config, IAM role, IRSA).
   access survives restarts (persisted to the file mtime at most once a
   minute per entry). A blob larger than the cap on its own is still served
   but is the first thing the next write evicts.
+- A blob that does not fit in the free space of the storage filesystem is
+  refused with `507 Insufficient Storage` before any byte is written, so a
+  pull can never fill the disk. With `MAX_STORAGE` set, eviction runs first
+  and the blob is refused only if evicting everything would still not make
+  room.
 
 ## Verify a running instance
 

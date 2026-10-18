@@ -2,11 +2,14 @@ package fs
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/RCM7/stashito/server/internal/app/server/domain/entity"
 )
 
 func putBlob(t *testing.T, cache *CacheRepository, digest string, size int) {
@@ -226,4 +229,98 @@ func TestNoCapMeansNoEviction(t *testing.T) {
 	if used := cache.UsedBytes(); used != 0 {
 		t.Errorf("UsedBytes without cap = %d, want 0", used)
 	}
+}
+
+func bytesOnDisk(t *testing.T, root string) int64 {
+	t.Helper()
+	var total int64
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		total += info.Size()
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return total
+}
+
+func stubDiskFree(t *testing.T, root string, capacity int64) {
+	t.Helper()
+	orig := diskFree
+	diskFree = func(string) (int64, bool) { return capacity - bytesOnDisk(t, root), true }
+	t.Cleanup(func() { diskFree = orig })
+}
+
+func reserve(t *testing.T, cache *CacheRepository, digest string, size int64) error {
+	t.Helper()
+	w, err := cache.PutBlob(testHost, testRepo, digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = w.Abort() })
+	return w.(*atomicBlobWriter).ReserveSize(size)
+}
+
+func TestReserveSizeRefusesBlobThatDoesNotFitOnDisk(t *testing.T) {
+	root := t.TempDir()
+	cache := NewCacheRepository(root)
+	putBlob(t, cache, "sha256:a", 100)
+	stubDiskFree(t, root, 150)
+
+	err := reserve(t, cache, "sha256:big", 100)
+	if !errors.Is(err, entity.ErrInsufficientStorage) {
+		t.Fatalf("ReserveSize = %v, want ErrInsufficientStorage", err)
+	}
+	assertBlob(t, cache, "sha256:a", true)
+}
+
+func TestReserveSizeEvictsToFreeDiskWhenCapped(t *testing.T) {
+	root := t.TempDir()
+	cache := NewCacheRepository(root)
+	if err := cache.SetMaxStorage(1000); err != nil {
+		t.Fatal(err)
+	}
+	putBlob(t, cache, "sha256:a", 100)
+	putBlob(t, cache, "sha256:b", 100)
+	stubDiskFree(t, root, 250)
+
+	if err := reserve(t, cache, "sha256:c", 100); err != nil {
+		t.Fatalf("ReserveSize = %v, want nil after eviction", err)
+	}
+	assertBlob(t, cache, "sha256:a", false)
+	assertBlob(t, cache, "sha256:b", true)
+}
+
+func TestReserveSizeRefusesWhenEvictionCannotFreeEnough(t *testing.T) {
+	root := t.TempDir()
+	cache := NewCacheRepository(root)
+	if err := cache.SetMaxStorage(1000); err != nil {
+		t.Fatal(err)
+	}
+	putBlob(t, cache, "sha256:a", 100)
+	stubDiskFree(t, root, 150)
+
+	err := reserve(t, cache, "sha256:huge", 500)
+	if !errors.Is(err, entity.ErrInsufficientStorage) {
+		t.Fatalf("ReserveSize = %v, want ErrInsufficientStorage", err)
+	}
+}
+
+func TestReserveSizeMakesRoomUnderCapBeforeWriting(t *testing.T) {
+	cache := cappedCache(t, 250)
+	putBlob(t, cache, "sha256:a", 100)
+	putBlob(t, cache, "sha256:b", 100)
+
+	if err := reserve(t, cache, "sha256:c", 100); err != nil {
+		t.Fatal(err)
+	}
+	assertBlob(t, cache, "sha256:a", false)
+	assertBlob(t, cache, "sha256:b", true)
 }
