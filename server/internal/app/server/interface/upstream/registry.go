@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/RCM7/stashito/server/internal/app/server/domain/entity"
+	"github.com/RCM7/stashito/server/internal/app/server/domain/gateway"
 	"github.com/RCM7/stashito/server/internal/app/server/metrics"
 )
 
@@ -407,6 +408,12 @@ func (g *RegistryGateway) GetBlob(ctx context.Context, registryHost string, repo
 	}
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("upstream returned %d for blob %s/%s@%s", resp.StatusCode, registryHost, repository, digest)
+	}
+
+	if reserver, ok := dest.(gateway.SizeReserver); ok && resp.ContentLength > 0 {
+		if err := reserver.ReserveSize(resp.ContentLength); err != nil {
+			return 0, err
+		}
 	}
 
 	n, err := io.Copy(dest, resp.Body)

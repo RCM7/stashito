@@ -53,6 +53,7 @@ All env vars are required unless marked optional. There are no other defaults.
 | `UPSTREAM_<ALIAS>_USERNAME` / `_PASSWORD` | Optional basic-auth pair for private upstreams. Docker Hub / GHCR / Quay: username + PAT or robot token. GAR: `_json_key` + service account JSON. ACR: service principal id + secret. ECR: AWS access key id + secret access key. |
 | `METRICS_ENABLED` | Optional, default `false`. `true` exposes Prometheus metrics at `GET /metrics` (`stashito_` prefix). |
 | `METRICS_PORT` | Optional. Serve `/metrics` on this separate port; 0/unset serves it on `PORT`. |
+| `MAX_STORAGE` | Optional. Cap on cached bytes, e.g. `500MB`, `50GB` or `2TB` (1024-based, as `df -h` reports; a bare number is bytes). Unset means unlimited. When a write would push the cache past the cap, the least recently pulled manifests and blobs are deleted first, inline, so the cap holds. |
 
 AWS ECR hosts (`<account>.dkr.ecr.<region>.amazonaws.com`, including FIPS
 and China variants) are detected automatically: the rotating ECR
@@ -65,6 +66,16 @@ credential chain (env vars, shared config, IAM role, IRSA).
 - Cache hits are served from disk without contacting upstream.
 - If upstream is unreachable, cached content is served stale.
 - Layers stay cached even if the image is later deleted upstream.
+- With `MAX_STORAGE` set, eviction runs inline on writes and counts bytes
+  still downloading, so concurrent pulls do not overshoot the cap. Last
+  access survives restarts (persisted to the file mtime at most once a
+  minute per entry). A blob larger than the cap on its own is still served
+  but is the first thing the next write evicts.
+- A blob that does not fit in the free space of the storage filesystem is
+  refused with `507 Insufficient Storage` before any byte is written, so a
+  pull can never fill the disk. With `MAX_STORAGE` set, eviction runs first
+  and the blob is refused only if evicting everything would still not make
+  room.
 
 ## Verify a running instance
 

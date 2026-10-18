@@ -31,18 +31,15 @@ func GetBlob(cache *fs.CacheRepository, upstream gateway.UpstreamGateway, regist
 		defer unlock()
 
 		// Check cache first — blobs are content-addressable and immutable
-		if size, ok := cache.BlobExists(registryHost, repo, digest); ok {
-			path, err := cache.GetBlobPath(registryHost, repo, digest)
-			if err == nil {
-				slog.Info("serving blob from cache", "repository", repo, "digest", digest, "size", size)
-				metrics.CacheHit("blob")
-				metrics.BlobBytes.WithLabelValues("cache").Add(float64(size))
-				return &entity.CachedBlob{
-					Digest: digest,
-					Size:   size,
-					Path:   path,
-				}, nil
-			}
+		if content, size, err := cache.OpenBlob(registryHost, repo, digest); err == nil {
+			slog.Info("serving blob from cache", "repository", repo, "digest", digest, "size", size)
+			metrics.CacheHit("blob")
+			metrics.BlobBytes.WithLabelValues("cache").Add(float64(size))
+			return &entity.CachedBlob{
+				Digest:  digest,
+				Size:    size,
+				Content: content,
+			}, nil
 		}
 
 		// Not cached — fetch from upstream and store
@@ -65,16 +62,16 @@ func GetBlob(cache *fs.CacheRepository, upstream gateway.UpstreamGateway, regist
 			return nil, err
 		}
 
-		path, err := cache.GetBlobPath(registryHost, repo, digest)
+		content, _, err := cache.OpenBlob(registryHost, repo, digest)
 		if err != nil {
 			return nil, err
 		}
 
 		metrics.BlobBytes.WithLabelValues("upstream").Add(float64(n))
 		return &entity.CachedBlob{
-			Digest: digest,
-			Size:   n,
-			Path:   path,
+			Digest:  digest,
+			Size:    n,
+			Content: content,
 		}, nil
 	}
 }
@@ -102,6 +99,7 @@ func HeadBlob(cache *fs.CacheRepository, upstream gateway.UpstreamGateway, regis
 		if err != nil {
 			return 0, err
 		}
+		blob.Content.Close()
 		return blob.Size, nil
 	}
 }

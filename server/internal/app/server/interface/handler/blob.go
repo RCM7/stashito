@@ -1,13 +1,16 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/RCM7/stashito/server/internal/app/server/domain/entity"
 	"github.com/RCM7/stashito/server/internal/app/server/interactor"
 )
 
@@ -31,14 +34,19 @@ func (h *BlobHandler) Get(ctx *gin.Context, name string, digest string) {
 		if strings.Contains(err.Error(), "unknown registry") || strings.Contains(err.Error(), "invalid image") {
 			status = http.StatusNotFound
 		}
+		if errors.Is(err, entity.ErrInsufficientStorage) {
+			ctx.JSON(http.StatusInsufficientStorage, ociError("INSUFFICIENT_STORAGE", err.Error()))
+			return
+		}
 		ctx.JSON(status, ociError("BLOB_UNKNOWN", err.Error()))
 		return
 	}
 
+	defer blob.Content.Close()
 	ctx.Header("Docker-Content-Digest", blob.Digest)
-	ctx.Header("Content-Length", fmt.Sprintf("%d", blob.Size))
 	ctx.Header("Docker-Distribution-API-Version", "registry/2.0")
-	ctx.File(blob.Path)
+	ctx.Header("Content-Type", "application/octet-stream")
+	http.ServeContent(ctx.Writer, ctx.Request, "", time.Time{}, blob.Content)
 }
 
 func (h *BlobHandler) Head(ctx *gin.Context, name string, digest string) {
@@ -48,6 +56,10 @@ func (h *BlobHandler) Head(ctx *gin.Context, name string, digest string) {
 		status := http.StatusBadGateway
 		if strings.Contains(err.Error(), "not found") {
 			status = http.StatusNotFound
+		}
+		if errors.Is(err, entity.ErrInsufficientStorage) {
+			ctx.JSON(http.StatusInsufficientStorage, ociError("INSUFFICIENT_STORAGE", err.Error()))
+			return
 		}
 		ctx.JSON(status, ociError("BLOB_UNKNOWN", err.Error()))
 		return

@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/RCM7/stashito/server/internal/app/server/domain/entity"
+	"github.com/RCM7/stashito/server/internal/app/server/domain/gateway"
 )
 
 var errUpstreamDown = errors.New("upstream unreachable")
@@ -47,6 +48,11 @@ func (f *fakeUpstream) GetBlob(ctx context.Context, registryHost string, reposit
 		// Simulate a partial download before the failure
 		_, _ = dest.Write([]byte("partial-"))
 		return 0, f.getBlobErr
+	}
+	if reserver, ok := dest.(gateway.SizeReserver); ok {
+		if err := reserver.ReserveSize(int64(len(f.blobData))); err != nil {
+			return 0, err
+		}
 	}
 	n, err := dest.Write(f.blobData)
 	return int64(n), err

@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -101,13 +102,17 @@ func TestBlobPutCommit(t *testing.T) {
 		t.Errorf("size = %d, want %d", size, len("layer-data"))
 	}
 
-	path, err := cache.GetBlobPath(testHost, testRepo, digest)
+	content, openedSize, err := cache.OpenBlob(testHost, testRepo, digest)
 	if err != nil {
-		t.Fatalf("GetBlobPath: %v", err)
+		t.Fatalf("OpenBlob: %v", err)
 	}
-	data, err := os.ReadFile(path)
+	defer content.Close()
+	if openedSize != size {
+		t.Errorf("OpenBlob size = %d, want %d", openedSize, size)
+	}
+	data, err := io.ReadAll(content)
 	if err != nil {
-		t.Fatalf("reading blob file: %v", err)
+		t.Fatalf("reading blob content: %v", err)
 	}
 	if string(data) != "layer-data" {
 		t.Errorf("blob content = %q, want %q", data, "layer-data")
@@ -145,9 +150,9 @@ func TestBlobAbort(t *testing.T) {
 	}
 }
 
-func TestGetBlobPathMissing(t *testing.T) {
+func TestOpenBlobMissing(t *testing.T) {
 	cache := NewCacheRepository(t.TempDir())
-	if _, err := cache.GetBlobPath(testHost, testRepo, "sha256:missing"); err == nil {
-		t.Error("GetBlobPath on empty cache = nil error, want error")
+	if _, _, err := cache.OpenBlob(testHost, testRepo, "sha256:missing"); err == nil {
+		t.Error("OpenBlob on empty cache = nil error, want error")
 	}
 }

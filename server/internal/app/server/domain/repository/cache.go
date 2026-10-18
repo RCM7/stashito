@@ -29,8 +29,9 @@ type CacheRepository interface {
 	// BlobExists checks if a blob exists in the cache. Returns size and existence.
 	BlobExists(registryHost string, repository string, digest string) (int64, bool)
 
-	// GetBlobPath returns the filesystem path for a cached blob.
-	GetBlobPath(registryHost string, repository string, digest string) (string, error)
+	// OpenBlob opens a cached blob for streaming and returns its size. The
+	// caller must Close the reader.
+	OpenBlob(registryHost string, repository string, digest string) (io.ReadSeekCloser, int64, error)
 
 	// PutBlob opens a writer for storing a blob. The caller must Close (commit)
 	// or Abort (discard) the writer. The write is atomic — the blob appears at

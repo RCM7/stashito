@@ -1,8 +1,10 @@
 package upstream
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -226,5 +228,44 @@ func TestBasicAuthMissingCredentials(t *testing.T) {
 	_, err := g.GetManifest(context.Background(), host, "team/app", "v1")
 	if err == nil || !strings.Contains(err.Error(), "no credentials") {
 		t.Fatalf("expected missing-credentials error, got: %v", err)
+	}
+}
+
+type reservingSink struct {
+	bytes.Buffer
+	reserved int64
+	err      error
+}
+
+func (r *reservingSink) ReserveSize(size int64) error {
+	r.reserved = size
+	return r.err
+}
+
+func TestGetBlobReservesContentLengthBeforeCopying(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v2/library/alpine/blobs/sha256:abc", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("layer-data"))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	host := strings.TrimPrefix(srv.URL, "http://")
+	g := newTestGateway(map[string]entity.Upstream{host: {Alias: "test", Host: host}})
+
+	sink := &reservingSink{}
+	if _, err := g.GetBlob(context.Background(), host, "library/alpine", "sha256:abc", sink); err != nil {
+		t.Fatalf("GetBlob: %v", err)
+	}
+	if sink.reserved != int64(len("layer-data")) {
+		t.Errorf("reserved = %d, want %d", sink.reserved, len("layer-data"))
+	}
+
+	refusing := &reservingSink{err: entity.ErrInsufficientStorage}
+	_, err := g.GetBlob(context.Background(), host, "library/alpine", "sha256:abc", refusing)
+	if !errors.Is(err, entity.ErrInsufficientStorage) {
+		t.Fatalf("GetBlob with refusing sink = %v, want ErrInsufficientStorage", err)
+	}
+	if refusing.Len() != 0 {
+		t.Errorf("refused blob still received %d bytes", refusing.Len())
 	}
 }

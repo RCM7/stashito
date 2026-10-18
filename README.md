@@ -63,6 +63,12 @@ IRSA).
 `LOG_FORMAT` is `text` or `json`. `GET /healthz` reports status, configured
 upstreams and storage writability as JSON.
 
+The cache grows without bound unless you set `MAX_STORAGE` (e.g. `50GB`,
+`2TB`). With a cap, the least recently pulled manifests and blobs are
+evicted inline as new ones are written, so disk use never exceeds it.
+Either way a blob that does not fit in the filesystem's free space is
+refused with `507 Insufficient Storage` instead of filling the disk.
+
 ## Metrics
 
 Set `METRICS_ENABLED=true` to expose Prometheus metrics at `GET /metrics`.
@@ -73,12 +79,14 @@ reachable by clients you don't want reading operational data.
 Everything is prefixed `stashito_`: cache hits and misses per content type
 (`stashito_cache_events_total`), blob bytes served from cache vs upstream
 (`stashito_blob_bytes_served_total`), request counts and latency histograms,
-upstream registry requests by host and status code, and storage gauges
-(bytes, blobs, manifests — rescanned at most once a minute).
+upstream registry requests by host and status code, storage gauges
+(bytes, blobs, manifests — rescanned at most once a minute), and eviction
+counters (`stashito_evictions_total`, `stashito_evicted_bytes_total`) next
+to the configured cap (`stashito_storage_max_bytes`).
 
 A ready-made Grafana dashboard lives at
 [`grafana/dashboard.json`](grafana/dashboard.json): hit rate, bandwidth
-saved, traffic, upstream health, latency and storage growth.
+saved, traffic, upstream health, latency and storage growth against the cap.
 
 ## Project policy
 
