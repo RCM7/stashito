@@ -21,7 +21,7 @@ https://stashito.com — full docs at https://stashito.com/llms.txt
 ```yaml
 services:
   stashito:
-    image: rcm7/stashito
+    image: rcm7/stashito:0
     environment:
       PORT: "8080"
       STORAGE_PATH: "/data/stashito"
@@ -41,6 +41,10 @@ volumes:
 The image is published for `linux/amd64`, `linux/arm64`, `linux/arm/v7`,
 `linux/arm/v6`, `linux/386`, `linux/ppc64le`, `linux/s390x` and
 `linux/riscv64`; docker picks the one matching the host.
+
+Every merge to master is a release. `0` and `latest` track the newest one,
+`0.3` and `0.3.1` pin one. Releases are listed at
+https://github.com/RCM7/stashito/releases.
 
 ```sh
 docker pull localhost:8080/dockerhub/library/postgres:16

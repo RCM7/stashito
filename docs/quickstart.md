@@ -8,7 +8,7 @@ One container, a volume, and at least one upstream.
 # docker-compose.yml
 services:
   stashito:
-    image: rcm7/stashito
+    image: rcm7/stashito:0
     environment:
       PORT: "8080"
       STORAGE_PATH: "/data/stashito"
@@ -33,12 +33,16 @@ docker run -d --name stashito -p 8080:8080 \
   -e PORT=8080 -e STORAGE_PATH=/data/stashito \
   -e LOG_LEVEL=info -e LOG_FORMAT=text -e TAG_TTL=60s \
   -e UPSTREAM_DOCKERHUB_HOST=registry-1.docker.io \
-  rcm7/stashito
+  rcm7/stashito:0
 ```
 
 The image is published for `linux/amd64`, `linux/arm64`, `linux/arm/v7`,
 `linux/arm/v6`, `linux/386`, `linux/ppc64le`, `linux/s390x` and
 `linux/riscv64`; docker picks the one matching the host.
+
+Every merge to master is a release. `0` and `latest` track the newest one,
+`0.3` and `0.3.1` pin one. Releases are listed at
+https://github.com/RCM7/stashito/releases.
 
 All variables are required unless marked optional in
 [configuration](/configuration) — if something is missing or mistyped,
