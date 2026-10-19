@@ -132,8 +132,8 @@ Do NOT include "Co-Authored-By" lines or attribution in commit messages.
 
 Every new feature ships with a pass over the public surfaces in the same
 change: docs/ (the VitePress site served at stashito.com/docs), README.md,
-and the Docker Hub description (source in server/docker/DOCKERHUB.md, pushed
-to hub.docker.com via the API). The landing page and llms.txt are maintained
+and the Docker Hub description (source in server/docker/DOCKERHUB.md, rendered
+and pushed to hub.docker.com by CI on every release). The landing page and llms.txt are maintained
 outside this repo; automated CI builds docs/ from here and deploys the full
 site (landing plus /docs) to stashito.com.
 
