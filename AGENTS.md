@@ -11,7 +11,7 @@ pulls from that cache. Ships as the Docker image `rcm7/stashito`.
 ```yaml
 services:
   stashito:
-    image: rcm7/stashito
+    image: rcm7/stashito:v0
     environment:
       PORT: "8080"
       STORAGE_PATH: "/data/stashito"
