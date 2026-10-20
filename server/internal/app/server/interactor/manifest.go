@@ -18,12 +18,7 @@ type HeadManifestInteractor func(ctx context.Context, name string, reference str
 
 func GetManifest(cache *fs.CacheRepository, upstream gateway.UpstreamGateway, registries entity.Registries, tagTTL time.Duration) GetManifestInteractor {
 	return func(ctx context.Context, name string, reference string) (*entity.CachedManifest, error) {
-		alias, repo, err := entity.ParseImageName(name)
-		if err != nil {
-			return nil, err
-		}
-
-		up, err := registries.Resolve(alias)
+		up, repo, err := registries.ResolveImage(name)
 		if err != nil {
 			return nil, err
 		}
@@ -39,12 +34,7 @@ func GetManifest(cache *fs.CacheRepository, upstream gateway.UpstreamGateway, re
 
 func HeadManifest(cache *fs.CacheRepository, upstream gateway.UpstreamGateway, registries entity.Registries, tagTTL time.Duration) HeadManifestInteractor {
 	return func(ctx context.Context, name string, reference string) (*entity.ManifestMetadata, error) {
-		alias, repo, err := entity.ParseImageName(name)
-		if err != nil {
-			return nil, err
-		}
-
-		up, err := registries.Resolve(alias)
+		up, repo, err := registries.ResolveImage(name)
 		if err != nil {
 			return nil, err
 		}

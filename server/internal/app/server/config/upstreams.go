@@ -8,7 +8,10 @@ import (
 	"github.com/RCM7/stashito/server/internal/app/server/domain/entity"
 )
 
-const upstreamPrefix = "UPSTREAM_"
+const (
+	upstreamPrefix    = "UPSTREAM_"
+	mirrorUpstreamKey = "MIRROR_UPSTREAM"
+)
 
 var upstreamSuffixes = []string{"_HOST", "_USERNAME", "_PASSWORD"}
 
@@ -17,6 +20,7 @@ var upstreamSuffixes = []string{"_HOST", "_USERNAME", "_PASSWORD"}
 //	UPSTREAM_<ALIAS>_HOST     — upstream registry host (required per alias)
 //	UPSTREAM_<ALIAS>_USERNAME — basic auth username (optional)
 //	UPSTREAM_<ALIAS>_PASSWORD — basic auth password (optional)
+//	MIRROR_UPSTREAM          — alias serving image names with no alias prefix (optional)
 //
 // The alias used in image names is the lowercased <ALIAS> segment, so
 // UPSTREAM_DOCKERHUB_HOST=registry-1.docker.io serves dockerhub/library/postgres.
@@ -26,6 +30,7 @@ func ParseUpstreams(environ []string) (entity.Registries, error) {
 		host, username, password string
 	}
 	byAlias := make(map[string]*raw)
+	mirrorAlias := ""
 
 	get := func(alias string) *raw {
 		if r, ok := byAlias[alias]; ok {
@@ -38,7 +43,14 @@ func ParseUpstreams(environ []string) (entity.Registries, error) {
 
 	for _, kv := range environ {
 		key, value, ok := strings.Cut(kv, "=")
-		if !ok || !strings.HasPrefix(key, upstreamPrefix) {
+		if !ok {
+			continue
+		}
+		if key == mirrorUpstreamKey {
+			mirrorAlias = strings.ToLower(strings.TrimSpace(value))
+			continue
+		}
+		if !strings.HasPrefix(key, upstreamPrefix) {
 			continue
 		}
 		for _, suffix := range upstreamSuffixes {
@@ -59,7 +71,7 @@ func ParseUpstreams(environ []string) (entity.Registries, error) {
 		}
 	}
 
-	registries := make(entity.Registries, len(byAlias))
+	upstreams := make(map[string]entity.Upstream, len(byAlias))
 	// Sorted for deterministic error reporting
 	aliases := make([]string, 0, len(byAlias))
 	for alias := range byAlias {
@@ -70,12 +82,12 @@ func ParseUpstreams(environ []string) (entity.Registries, error) {
 	for _, alias := range aliases {
 		r := byAlias[alias]
 		if r.host == "" {
-			return nil, fmt.Errorf("upstream %q has credentials but no UPSTREAM_%s_HOST", alias, strings.ToUpper(alias))
+			return entity.Registries{}, fmt.Errorf("upstream %q has credentials but no UPSTREAM_%s_HOST", alias, strings.ToUpper(alias))
 		}
 		if (r.username == "") != (r.password == "") {
-			return nil, fmt.Errorf("upstream %q must set both UPSTREAM_%s_USERNAME and UPSTREAM_%s_PASSWORD, or neither", alias, strings.ToUpper(alias), strings.ToUpper(alias))
+			return entity.Registries{}, fmt.Errorf("upstream %q must set both UPSTREAM_%s_USERNAME and UPSTREAM_%s_PASSWORD, or neither", alias, strings.ToUpper(alias), strings.ToUpper(alias))
 		}
-		registries[alias] = entity.Upstream{
+		upstreams[alias] = entity.Upstream{
 			Alias:    alias,
 			Host:     r.host,
 			Username: r.username,
@@ -83,9 +95,15 @@ func ParseUpstreams(environ []string) (entity.Registries, error) {
 		}
 	}
 
-	if len(registries) == 0 {
-		return nil, fmt.Errorf("no upstreams configured: set at least one UPSTREAM_<ALIAS>_HOST")
+	if len(upstreams) == 0 {
+		return entity.Registries{}, fmt.Errorf("no upstreams configured: set at least one UPSTREAM_<ALIAS>_HOST")
 	}
 
-	return registries, nil
+	if mirrorAlias != "" {
+		if _, ok := upstreams[mirrorAlias]; !ok {
+			return entity.Registries{}, fmt.Errorf("MIRROR_UPSTREAM %q is not a configured alias: set UPSTREAM_%s_HOST or pick one of %s", mirrorAlias, strings.ToUpper(mirrorAlias), strings.Join(aliases, ", "))
+		}
+	}
+
+	return entity.Registries{Upstreams: upstreams, Mirror: mirrorAlias}, nil
 }

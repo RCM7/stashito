@@ -71,5 +71,7 @@ func newManifest(digest string, body string) *entity.CachedManifest {
 
 // testRegistries maps the dockerhub alias used across interactor tests.
 var testRegistries = entity.Registries{
-	"dockerhub": {Alias: "dockerhub", Host: "registry-1.docker.io"},
+	Upstreams: map[string]entity.Upstream{
+		"dockerhub": {Alias: "dockerhub", Host: "registry-1.docker.io"},
+	},
 }

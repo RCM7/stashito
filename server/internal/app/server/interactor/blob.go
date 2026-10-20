@@ -15,12 +15,7 @@ type HeadBlobInteractor func(ctx context.Context, name string, digest string) (i
 
 func GetBlob(cache *fs.CacheRepository, upstream gateway.UpstreamGateway, registries entity.Registries) GetBlobInteractor {
 	return func(ctx context.Context, name string, digest string) (*entity.CachedBlob, error) {
-		alias, repo, err := entity.ParseImageName(name)
-		if err != nil {
-			return nil, err
-		}
-
-		up, err := registries.Resolve(alias)
+		up, repo, err := registries.ResolveImage(name)
 		if err != nil {
 			return nil, err
 		}
@@ -78,12 +73,7 @@ func GetBlob(cache *fs.CacheRepository, upstream gateway.UpstreamGateway, regist
 
 func HeadBlob(cache *fs.CacheRepository, upstream gateway.UpstreamGateway, registries entity.Registries) HeadBlobInteractor {
 	return func(ctx context.Context, name string, digest string) (int64, error) {
-		alias, repo, err := entity.ParseImageName(name)
-		if err != nil {
-			return 0, err
-		}
-
-		up, err := registries.Resolve(alias)
+		up, repo, err := registries.ResolveImage(name)
 		if err != nil {
 			return 0, err
 		}

@@ -59,7 +59,10 @@ registries). Everything after it is the ordinary image path.
 AWS ECR hosts are detected automatically; stashito fetches and rotates the
 ECR authorization token itself, using `_USERNAME` / `_PASSWORD` as AWS
 access keys or, when unset, the AWS default credential chain (IAM role,
-IRSA). Set `MAX_STORAGE` (e.g. `50GB`) to cap the cache: least recently
+IRSA). Set `MIRROR_UPSTREAM=dockerhub` and point the Docker daemon at
+Stashito with `registry-mirrors` (or containerd `hosts.toml`, or a podman
+mirror): every `docker pull postgres` is then served from the cache with no
+image reference changed. Set `MAX_STORAGE` (e.g. `50GB`) to cap the cache: least recently
 pulled layers are evicted inline so disk use never exceeds it. A blob that
 does not fit in free disk space is refused with `507` rather than filling
 the disk.

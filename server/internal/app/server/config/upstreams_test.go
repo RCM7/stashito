@@ -22,8 +22,11 @@ func TestParseUpstreams(t *testing.T) {
 		t.Fatalf("ParseUpstreams: %v", err)
 	}
 
-	if len(registries) != 3 {
-		t.Fatalf("expected 3 upstreams, got %d", len(registries))
+	if len(registries.Upstreams) != 3 {
+		t.Fatalf("expected 3 upstreams, got %d", len(registries.Upstreams))
+	}
+	if registries.Mirror != "" {
+		t.Errorf("Default = %q, want empty", registries.Mirror)
 	}
 
 	hub, err := registries.Resolve("dockerhub")
@@ -62,6 +65,20 @@ func TestParseUpstreams(t *testing.T) {
 	}
 }
 
+func TestParseUpstreamsDefault(t *testing.T) {
+	registries, err := ParseUpstreams([]string{
+		"UPSTREAM_DOCKERHUB_HOST=registry-1.docker.io",
+		"UPSTREAM_GHCR_HOST=ghcr.io",
+		"MIRROR_UPSTREAM=DockerHub",
+	})
+	if err != nil {
+		t.Fatalf("ParseUpstreams: %v", err)
+	}
+	if registries.Mirror != "dockerhub" {
+		t.Errorf("Default = %q, want dockerhub", registries.Mirror)
+	}
+}
+
 func TestParseUpstreamsErrors(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -72,6 +89,14 @@ func TestParseUpstreamsErrors(t *testing.T) {
 			name:    "no upstreams",
 			environ: []string{"PORT=8080"},
 			wantErr: "no upstreams configured",
+		},
+		{
+			name: "default names unknown alias",
+			environ: []string{
+				"UPSTREAM_DOCKERHUB_HOST=registry-1.docker.io",
+				"MIRROR_UPSTREAM=ghcr",
+			},
+			wantErr: "MIRROR_UPSTREAM",
 		},
 		{
 			name: "credentials without host",

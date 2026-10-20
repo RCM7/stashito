@@ -12,6 +12,7 @@ optional; there are no other defaults.
 | `TAG_TTL` | Go duration (e.g. `60s`). Tag manifests are served from cache without upstream revalidation within this window; after it expires the next request revalidates via upstream HEAD (digest compare). Digest manifests and blobs are immutable and never revalidated. |
 | `UPSTREAM_<ALIAS>_HOST` | One per upstream registry host (e.g. `registry-1.docker.io`). At least one required. See [registries](/registries). |
 | `UPSTREAM_<ALIAS>_USERNAME` / `_PASSWORD` | Optional basic-auth pair for private upstreams. For ECR hosts: AWS access key id + secret access key (unset = AWS default credential chain). |
+| `MIRROR_UPSTREAM` | Optional. Alias that serves image names with no alias prefix, so `docker pull postgres` works with Stashito configured as a registry mirror. See [mirror mode](/registries#mirror-mode). |
 | `METRICS_ENABLED` | Optional, default `false`. `true` exposes Prometheus metrics at `GET /metrics`. |
 | `METRICS_PORT` | Optional. Serve `/metrics` on this separate port; 0/unset serves it on `PORT`. |
 | `MAX_STORAGE` | Optional. Cap on cached bytes, e.g. `500MB`, `50GB` or `2TB` (1024-based, as `df -h` reports; a bare number is bytes). Unset means unlimited. When a write would push the cache past the cap, the least recently pulled manifests and blobs are deleted first, inline, so the cap holds. |

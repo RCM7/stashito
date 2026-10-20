@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -47,16 +46,13 @@ func RunRouter(c *config.Config) error {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
-	upstreams := make([]string, 0, len(c.Upstreams))
-	for alias := range c.Upstreams {
-		upstreams = append(upstreams, alias)
-	}
-	sort.Strings(upstreams)
+	upstreams := c.Upstreams.Aliases()
 
 	router.GET("/healthz", func(ctx *gin.Context) {
 		resp := gin.H{
 			"status":           "ok",
 			"upstreams":        upstreams,
+			"mirror_upstream":  c.Upstreams.Mirror,
 			"storage_path":     c.StoragePath,
 			"storage_writable": true,
 		}

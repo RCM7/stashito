@@ -68,6 +68,11 @@ AWS ECR hosts are detected automatically; stashito fetches and rotates the
 ECR authorization token itself, using `_USERNAME` / `_PASSWORD` as AWS
 access keys or, when unset, the AWS default credential chain (IAM role,
 IRSA).
+Set `MIRROR_UPSTREAM=dockerhub` and image names need no prefix: point the
+Docker daemon at Stashito with `"registry-mirrors": ["http://stashito:8080"]`
+in `daemon.json` (or containerd `hosts.toml`, or a podman mirror) and every
+`docker pull postgres` is served from the cache with no image reference
+changed. Full examples at https://stashito.com/docs/registries#mirror-mode.
 `LOG_FORMAT` is `text` or `json`. `GET /healthz` reports status, configured
 upstreams and storage writability as JSON.
 

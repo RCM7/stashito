@@ -58,13 +58,17 @@ The first path segment names an upstream you configured: `dockerhub` is the
 lowercased `<ALIAS>` from `UPSTREAM_DOCKERHUB_HOST`. Everything after it is
 the ordinary image path on that upstream.
 
+To keep image names unchanged instead, set `MIRROR_UPSTREAM=dockerhub` and
+point the Docker daemon at Stashito with `registry-mirrors`; see
+[mirror mode](/registries#mirror-mode).
+
 ## verify
 
 ```sh
 curl -f http://localhost:8080/healthz
 ```
 
-Returns `status`, configured `upstreams`, `storage_path` and
-`storage_writable` as JSON; `503` when degraded. Then pull the same image
+Returns `status`, configured `upstreams`, `mirror_upstream`, `storage_path`
+and `storage_writable` as JSON; `503` when degraded. Then pull the same image
 twice: the first pull is a miss (fetched and cached), the second is served
 from cache.

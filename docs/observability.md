@@ -19,5 +19,5 @@ A ready-made Grafana dashboard ships in the repo at `grafana/dashboard.json`.
 
 ## health
 
-`GET /healthz` reports `status`, configured `upstreams`, `storage_path` and
-`storage_writable` as JSON, and returns `503` when degraded.
+`GET /healthz` reports `status`, configured `upstreams`, `mirror_upstream`,
+`storage_path` and `storage_writable` as JSON, and returns `503` when degraded.

@@ -14,6 +14,55 @@ docker pull localhost:8080/ghcr/acme/api:1.4
 For private upstreams add `UPSTREAM_<ALIAS>_USERNAME` and
 `UPSTREAM_<ALIAS>_PASSWORD`.
 
+## mirror mode
+
+Set `MIRROR_UPSTREAM` to one of the aliases and image names without an
+alias prefix go to that upstream. That is the request shape docker,
+containerd and podman send when Stashito is their registry mirror, so every
+`docker pull postgres` in every Dockerfile, compose file and CI job is
+served from the cache with no image reference changed.
+
+```sh
+UPSTREAM_DOCKERHUB_HOST=registry-1.docker.io
+MIRROR_UPSTREAM=dockerhub
+```
+
+Docker daemon, in `/etc/docker/daemon.json` (Docker mirrors Docker Hub
+only, so the mirrored alias is the Docker Hub one):
+
+```json
+{ "registry-mirrors": ["http://stashito.internal:8080"] }
+```
+
+containerd, including Kubernetes, k3s and Kind, in
+`/etc/containerd/certs.d/docker.io/hosts.toml`:
+
+```toml
+server = "https://registry-1.docker.io"
+
+[host."http://stashito.internal:8080"]
+  capabilities = ["pull", "resolve"]
+```
+
+podman, in `/etc/containers/registries.conf.d/stashito.conf`:
+
+```toml
+[[registry]]
+location = "docker.io"
+
+[[registry.mirror]]
+location = "stashito.internal:8080"
+insecure = true
+```
+
+A name with no prefix carries no registry, so one upstream is mirrored.
+Other upstreams keep their alias prefix. A configured alias wins over the
+mirror: `dockerhub/library/postgres` always means the `dockerhub` upstream,
+so pick aliases that do not collide with namespaces on the mirrored
+upstream. Both forms share one cache: a layer pulled as
+`localhost:8080/dockerhub/library/postgres` is a hit for `postgres` through
+the mirror.
+
 ## credentials per registry
 
 | Registry | Username / password |

@@ -95,3 +95,35 @@ func TestHeadBlobCached(t *testing.T) {
 		t.Errorf("getBlobCalls = %d, want 0", up.getBlobCalls)
 	}
 }
+
+func TestGetBlobMirrorPathSharesCacheWithPrefixedPath(t *testing.T) {
+	cache := fs.NewCacheRepository(t.TempDir())
+	digest := "sha256:layer1"
+	up := &fakeUpstream{blobData: []byte("layer-data")}
+	mirror := testRegistries
+	mirror.Mirror = "dockerhub"
+
+	blob, err := GetBlob(cache, up, mirror)(context.Background(), imageName, digest)
+	if err != nil {
+		t.Fatalf("GetBlob (prefixed): %v", err)
+	}
+	blob.Content.Close()
+
+	up.blobData = []byte("changed-upstream")
+	blob, err = GetBlob(cache, up, mirror)(context.Background(), "library/alpine", digest)
+	if err != nil {
+		t.Fatalf("GetBlob (mirror): %v", err)
+	}
+	defer blob.Content.Close()
+	data, err := io.ReadAll(blob.Content)
+	if err != nil {
+		t.Fatalf("reading blob content: %v", err)
+	}
+	if string(data) != "layer-data" {
+		t.Errorf("mirror path content = %q, want cached %q", data, "layer-data")
+	}
+
+	if _, err := GetBlob(cache, up, testRegistries)(context.Background(), "library/alpine", digest); err == nil {
+		t.Error("GetBlob without MIRROR_UPSTREAM accepted an un-prefixed name")
+	}
+}

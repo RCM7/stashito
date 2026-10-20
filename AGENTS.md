@@ -51,6 +51,7 @@ All env vars are required unless marked optional. There are no other defaults.
 | `TAG_TTL` | Go duration (e.g. `60s`). Tag manifests are served from cache without upstream revalidation within this window; after it expires the next request revalidates via upstream HEAD (digest compare). Digest manifests and blobs are immutable and never revalidated. |
 | `UPSTREAM_<ALIAS>_HOST` | One per upstream registry host (e.g. `registry-1.docker.io`). At least one required. |
 | `UPSTREAM_<ALIAS>_USERNAME` / `_PASSWORD` | Optional basic-auth pair for private upstreams. Docker Hub / GHCR / Quay: username + PAT or robot token. GAR: `_json_key` + service account JSON. ACR: service principal id + secret. ECR: AWS access key id + secret access key. |
+| `MIRROR_UPSTREAM` | Optional. Alias that serves image names with no alias prefix (mirror mode): Docker daemon `registry-mirrors`, containerd `hosts.toml` and podman mirrors send `/v2/library/postgres` and get the mirrored upstream. A configured alias always wins over the mirror. Both forms share one cache. |
 | `METRICS_ENABLED` | Optional, default `false`. `true` exposes Prometheus metrics at `GET /metrics` (`stashito_` prefix). |
 | `METRICS_PORT` | Optional. Serve `/metrics` on this separate port; 0/unset serves it on `PORT`. |
 | `MAX_STORAGE` | Optional. Cap on cached bytes, e.g. `500MB`, `50GB` or `2TB` (1024-based, as `df -h` reports; a bare number is bytes). Unset means unlimited. When a write would push the cache past the cap, the least recently pulled manifests and blobs are deleted first, inline, so the cap holds. |
@@ -84,7 +85,7 @@ curl -f http://localhost:8080/healthz
 ```
 
 Returns JSON: `status` (`ok` or `degraded`), configured `upstreams`,
-`storage_path` and `storage_writable`; `503` when degraded. `GET /v2/`
+`mirror_upstream`, `storage_path` and `storage_writable`; `503` when degraded. `GET /v2/`
 returning `200` is the minimal OCI liveness check. Pull the same image twice:
 the first pull is a miss (fetched and cached), the second is served from
 cache.
@@ -97,7 +98,8 @@ cache.
 - `GET/HEAD /v2/<name>/blobs/<digest>` — blob (layer/config data)
 - `GET /metrics` — Prometheus metrics; only when `METRICS_ENABLED=true`, on `METRICS_PORT` when set
 
-Where `<name>` is like `dockerhub/library/postgres`.
+Where `<name>` is like `dockerhub/library/postgres`, or `library/postgres`
+with `MIRROR_UPSTREAM` set.
 
 ## Development
 
