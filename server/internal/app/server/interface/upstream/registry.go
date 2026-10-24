@@ -333,7 +333,7 @@ func (g *RegistryGateway) GetManifest(ctx context.Context, registryHost string, 
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("manifest not found: %s/%s:%s", registryHost, repository, reference)
+		return nil, fmt.Errorf("%w: %s/%s:%s", entity.ErrManifestNotFound, registryHost, repository, reference)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("upstream returned %d for manifest %s/%s:%s", resp.StatusCode, registryHost, repository, reference)
@@ -381,7 +381,7 @@ func (g *RegistryGateway) HeadManifest(ctx context.Context, registryHost string,
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("manifest not found: %s/%s:%s", registryHost, repository, reference)
+		return nil, fmt.Errorf("%w: %s/%s:%s", entity.ErrManifestNotFound, registryHost, repository, reference)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("upstream returned %d for HEAD manifest %s/%s:%s", resp.StatusCode, registryHost, repository, reference)

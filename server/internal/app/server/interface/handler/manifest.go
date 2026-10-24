@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/RCM7/stashito/server/internal/app/server/domain/entity"
 	"github.com/RCM7/stashito/server/internal/app/server/interactor"
 )
 
@@ -23,6 +25,11 @@ func NewManifestHandler(get interactor.GetManifestInteractor, head interactor.He
 func (h *ManifestHandler) Get(ctx *gin.Context, name string, reference string) {
 	manifest, err := h.getInteractor(ctx.Request.Context(), name, reference)
 	if err != nil {
+		if errors.Is(err, entity.ErrManifestNotFound) {
+			slog.Debug("manifest not found", "name", name, "reference", reference)
+			ctx.JSON(http.StatusNotFound, ociError("MANIFEST_UNKNOWN", err.Error()))
+			return
+		}
 		slog.Error("failed to get manifest", "name", name, "reference", reference, "error", err)
 		status := http.StatusBadGateway
 		code := "MANIFEST_UNKNOWN"
@@ -46,6 +53,11 @@ func (h *ManifestHandler) Get(ctx *gin.Context, name string, reference string) {
 func (h *ManifestHandler) Head(ctx *gin.Context, name string, reference string) {
 	meta, err := h.headInteractor(ctx.Request.Context(), name, reference)
 	if err != nil {
+		if errors.Is(err, entity.ErrManifestNotFound) {
+			slog.Debug("manifest not found", "name", name, "reference", reference)
+			ctx.JSON(http.StatusNotFound, ociError("MANIFEST_UNKNOWN", err.Error()))
+			return
+		}
 		slog.Error("failed to HEAD manifest", "name", name, "reference", reference, "error", err)
 		status := http.StatusBadGateway
 		if strings.Contains(err.Error(), "not found") {

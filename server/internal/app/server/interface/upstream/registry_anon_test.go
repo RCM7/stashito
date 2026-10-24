@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -84,8 +85,11 @@ func TestGetManifestNotFound(t *testing.T) {
 	defer srv.Close()
 
 	g, host := anonGateway(srv)
-	if _, err := g.GetManifest(context.Background(), host, "library/alpine", "nope"); err == nil {
-		t.Error("404 = nil error, want error")
+	if _, err := g.GetManifest(context.Background(), host, "library/alpine", "nope"); !errors.Is(err, entity.ErrManifestNotFound) {
+		t.Errorf("GetManifest 404 = %v, want ErrManifestNotFound", err)
+	}
+	if _, err := g.HeadManifest(context.Background(), host, "library/alpine", "nope"); !errors.Is(err, entity.ErrManifestNotFound) {
+		t.Errorf("HeadManifest 404 = %v, want ErrManifestNotFound", err)
 	}
 }
 

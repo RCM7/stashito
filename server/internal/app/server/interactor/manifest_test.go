@@ -2,9 +2,12 @@ package interactor
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/RCM7/stashito/server/internal/app/server/domain/entity"
 	"github.com/RCM7/stashito/server/internal/app/server/interface/storage/fs"
 )
 
@@ -141,6 +144,38 @@ func TestGetManifestByTagUpstreamDownNoCacheErrors(t *testing.T) {
 
 	if _, err := GetManifest(cache, up, testRegistries, 0)(context.Background(), imageName, "latest"); err == nil {
 		t.Error("upstream down with empty cache = nil error, want error")
+	}
+}
+
+func TestGetManifestByTagNotFoundUpstreamNoCacheReturnsNotFound(t *testing.T) {
+	cache := fs.NewCacheRepository(t.TempDir())
+	notFound := fmt.Errorf("%w: %s/%s:sha256-abc", entity.ErrManifestNotFound, testHost, testRepo)
+	up := &fakeUpstream{headManifestErr: notFound, getManifestErr: notFound}
+
+	_, err := GetManifest(cache, up, testRegistries, 0)(context.Background(), imageName, "sha256-abc")
+	if !errors.Is(err, entity.ErrManifestNotFound) {
+		t.Errorf("GetManifest = %v, want ErrManifestNotFound", err)
+	}
+	_, err = HeadManifest(cache, up, testRegistries, 0)(context.Background(), imageName, "sha256-abc")
+	if !errors.Is(err, entity.ErrManifestNotFound) {
+		t.Errorf("HeadManifest = %v, want ErrManifestNotFound", err)
+	}
+}
+
+func TestGetManifestByTagDeletedUpstreamServesCached(t *testing.T) {
+	cache := fs.NewCacheRepository(t.TempDir())
+	if err := cache.PutManifest(testHost, testRepo, "latest", newManifest("sha256:abc", "kept-body")); err != nil {
+		t.Fatal(err)
+	}
+	notFound := fmt.Errorf("%w: %s/%s:latest", entity.ErrManifestNotFound, testHost, testRepo)
+	up := &fakeUpstream{headManifestErr: notFound, getManifestErr: notFound}
+
+	got, err := GetManifest(cache, up, testRegistries, 0)(context.Background(), imageName, "latest")
+	if err != nil {
+		t.Fatalf("GetManifest: %v, a tag deleted upstream must still be served from cache", err)
+	}
+	if string(got.Body) != "kept-body" {
+		t.Errorf("body = %q, want %q", got.Body, "kept-body")
 	}
 }
 

@@ -2,6 +2,7 @@ package interactor
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -70,7 +71,7 @@ func HeadManifest(cache *fs.CacheRepository, upstream gateway.UpstreamGateway, r
 				return upstreamMeta, nil
 			}
 			// Upstream failed — fall through to serve stale cache
-			slog.Warn("upstream HEAD failed, checking stale cache", "error", err)
+			logUpstreamHeadFailure(err, repo, reference)
 		}
 
 		if meta, ok := cache.ManifestExists(registryHost, repo, reference); ok {
@@ -135,7 +136,7 @@ func getManifestCacheThrough(
 	}
 
 	// Upstream HEAD failed — try stale cache
-	slog.Warn("upstream HEAD failed, trying stale cache", "error", headErr, "repository", repository, "tag", reference)
+	logUpstreamHeadFailure(headErr, repository, reference)
 	if manifest, err := cache.GetManifest(registryHost, repository, reference); err == nil {
 		slog.Warn("serving stale manifest from cache", "repository", repository, "tag", reference)
 		metrics.CacheHit("manifest")
@@ -186,6 +187,14 @@ func refreshManifestTTL(cache repository.CacheRepository, registryHost string, r
 	if err := cache.PutManifest(registryHost, repository, reference, manifest); err != nil {
 		slog.Error("failed to refresh manifest TTL", "error", err, "repository", repository, "reference", reference)
 	}
+}
+
+func logUpstreamHeadFailure(err error, repository string, reference string) {
+	if errors.Is(err, entity.ErrManifestNotFound) {
+		slog.Debug("tag not found upstream, checking cache", "repository", repository, "tag", reference)
+		return
+	}
+	slog.Warn("upstream HEAD failed, trying stale cache", "error", err, "repository", repository, "tag", reference)
 }
 
 func isDigest(ref string) bool {
