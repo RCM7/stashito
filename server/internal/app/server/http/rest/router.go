@@ -25,7 +25,7 @@ func RunRouter(c *config.Config) error {
 	// Initialize storage and upstream
 	cacheRepo := fs.NewCacheRepository(c.StoragePath)
 	if c.MaxStorage > 0 {
-		if err := cacheRepo.SetMaxStorage(int64(c.MaxStorage)); err != nil {
+		if err := cacheRepo.SetMaxStorage(int64(c.MaxStorage), c.MaxStorageHeadroom.Of(int64(c.MaxStorage))); err != nil {
 			return err
 		}
 	}

@@ -29,7 +29,7 @@ func putBlob(t *testing.T, cache *CacheRepository, digest string, size int) {
 func cappedCache(t *testing.T, max int64) *CacheRepository {
 	t.Helper()
 	cache := NewCacheRepository(t.TempDir())
-	if err := cache.SetMaxStorage(max); err != nil {
+	if err := cache.SetMaxStorage(max, 0); err != nil {
 		t.Fatalf("SetMaxStorage: %v", err)
 	}
 	return cache
@@ -53,6 +53,61 @@ func TestEvictionKeepsUsedUnderMax(t *testing.T) {
 	assertBlob(t, cache, "sha256:c", true)
 	if used := cache.UsedBytes(); used != 200 {
 		t.Errorf("UsedBytes = %d, want 200", used)
+	}
+}
+
+func TestHeadroomEvictsBelowCapInOneBatch(t *testing.T) {
+	cache := NewCacheRepository(t.TempDir())
+	if err := cache.SetMaxStorage(500, 200); err != nil {
+		t.Fatalf("SetMaxStorage: %v", err)
+	}
+	for _, d := range []string{"sha256:a", "sha256:b", "sha256:c", "sha256:d", "sha256:e"} {
+		putBlob(t, cache, d, 100)
+	}
+	if used := cache.UsedBytes(); used != 500 {
+		t.Fatalf("UsedBytes at cap = %d, want 500", used)
+	}
+
+	putBlob(t, cache, "sha256:f", 100)
+	assertBlob(t, cache, "sha256:a", false)
+	assertBlob(t, cache, "sha256:b", false)
+	assertBlob(t, cache, "sha256:c", false)
+	assertBlob(t, cache, "sha256:d", true)
+	assertBlob(t, cache, "sha256:f", true)
+	if used := cache.UsedBytes(); used != 300 {
+		t.Errorf("UsedBytes after batch eviction = %d, want 300", used)
+	}
+
+	putBlob(t, cache, "sha256:g", 100)
+	putBlob(t, cache, "sha256:h", 100)
+	assertBlob(t, cache, "sha256:d", true)
+	if used := cache.UsedBytes(); used != 500 {
+		t.Errorf("UsedBytes refilling to cap = %d, want 500", used)
+	}
+}
+
+func TestHeadroomAppliesToMakeRoomAndStartup(t *testing.T) {
+	root := t.TempDir()
+	cache := NewCacheRepository(root)
+	if err := cache.SetMaxStorage(500, 200); err != nil {
+		t.Fatalf("SetMaxStorage: %v", err)
+	}
+	for _, d := range []string{"sha256:a", "sha256:b", "sha256:c", "sha256:d", "sha256:e"} {
+		putBlob(t, cache, d, 100)
+	}
+	if err := reserve(t, cache, "sha256:f", 100); err != nil {
+		t.Fatal(err)
+	}
+	if used := cache.UsedBytes(); used != 200 {
+		t.Errorf("UsedBytes after ReserveSize = %d, want 200", used)
+	}
+
+	reopened := NewCacheRepository(root)
+	if err := reopened.SetMaxStorage(150, 100); err != nil {
+		t.Fatalf("SetMaxStorage: %v", err)
+	}
+	if used := reopened.UsedBytes(); used > 50 {
+		t.Errorf("UsedBytes after startup eviction = %d, want at most 50", used)
 	}
 }
 
@@ -196,7 +251,7 @@ func TestStartupIndexEvictsOldestByMtime(t *testing.T) {
 	}
 
 	reopened := NewCacheRepository(root)
-	if err := reopened.SetMaxStorage(150); err != nil {
+	if err := reopened.SetMaxStorage(150, 0); err != nil {
 		t.Fatalf("SetMaxStorage: %v", err)
 	}
 	assertBlob(t, reopened, "sha256:old", false)
@@ -211,7 +266,7 @@ func TestStartupIndexEvictsOldestByMtime(t *testing.T) {
 
 func TestStartupIndexOnMissingRoot(t *testing.T) {
 	cache := NewCacheRepository(filepath.Join(t.TempDir(), "missing"))
-	if err := cache.SetMaxStorage(100); err != nil {
+	if err := cache.SetMaxStorage(100, 0); err != nil {
 		t.Fatalf("SetMaxStorage on missing root: %v", err)
 	}
 	putBlob(t, cache, "sha256:a", 50)
@@ -284,7 +339,7 @@ func TestReserveSizeRefusesBlobThatDoesNotFitOnDisk(t *testing.T) {
 func TestReserveSizeEvictsToFreeDiskWhenCapped(t *testing.T) {
 	root := t.TempDir()
 	cache := NewCacheRepository(root)
-	if err := cache.SetMaxStorage(1000); err != nil {
+	if err := cache.SetMaxStorage(1000, 0); err != nil {
 		t.Fatal(err)
 	}
 	putBlob(t, cache, "sha256:a", 100)
@@ -301,7 +356,7 @@ func TestReserveSizeEvictsToFreeDiskWhenCapped(t *testing.T) {
 func TestReserveSizeRefusesWhenEvictionCannotFreeEnough(t *testing.T) {
 	root := t.TempDir()
 	cache := NewCacheRepository(root)
-	if err := cache.SetMaxStorage(1000); err != nil {
+	if err := cache.SetMaxStorage(1000, 0); err != nil {
 		t.Fatal(err)
 	}
 	putBlob(t, cache, "sha256:a", 100)

@@ -63,7 +63,8 @@ IRSA). Set `MIRROR_UPSTREAM=dockerhub` and point the Docker daemon at
 Stashito with `registry-mirrors` (or containerd `hosts.toml`, or a podman
 mirror): every `docker pull postgres` is then served from the cache with no
 image reference changed. Set `MAX_STORAGE` (e.g. `50GB`) to cap the cache: least recently
-pulled layers are evicted inline so disk use never exceeds it. A blob that
+pulled layers are evicted inline so disk use never exceeds it, each pass freeing
+`MAX_STORAGE_HEADROOM` (default `10%`) below the cap. A blob that
 does not fit in free disk space is refused with `507` rather than filling
 the disk.
 

@@ -34,10 +34,11 @@ func NewCacheRepository(root string) *CacheRepository {
 }
 
 // SetMaxStorage caps the bytes kept under root. It indexes what is already on
-// disk, evicts down to max if needed, and from then on evicts least recently
-// used entries inline whenever a write would push the cache past max.
-func (c *CacheRepository) SetMaxStorage(max int64) error {
-	ev, err := newEvictor(c.root, max)
+// disk, evicts if needed, and from then on evicts least recently used entries
+// inline whenever a write would push the cache past max. Each eviction frees
+// down to max minus headroom so writes near the cap do not evict one by one.
+func (c *CacheRepository) SetMaxStorage(max, headroom int64) error {
+	ev, err := newEvictor(c.root, max, headroom)
 	if err != nil {
 		return fmt.Errorf("indexing storage: %w", err)
 	}

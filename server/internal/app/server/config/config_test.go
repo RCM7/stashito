@@ -49,3 +49,36 @@ func TestMaxStorageInvalidFailsStartup(t *testing.T) {
 		t.Fatal("Process with invalid MAX_STORAGE = nil error, want error")
 	}
 }
+
+func TestMaxStorageHeadroomDefaultsToTenPercent(t *testing.T) {
+	c, err := processConfig(t, map[string]string{"MAX_STORAGE": "1000"})
+	if err != nil {
+		t.Fatalf("Process: %v", err)
+	}
+	if c.MaxStorageHeadroom != 10 {
+		t.Errorf("MaxStorageHeadroom = %d, want 10", c.MaxStorageHeadroom)
+	}
+	if got := c.MaxStorageHeadroom.Of(int64(c.MaxStorage)); got != 100 {
+		t.Errorf("headroom of 1000 = %d, want 100", got)
+	}
+}
+
+func TestMaxStorageHeadroomParsed(t *testing.T) {
+	for _, in := range []string{"25%", "25", " 25 % "} {
+		c, err := processConfig(t, map[string]string{"MAX_STORAGE_HEADROOM": in})
+		if err != nil {
+			t.Fatalf("Process with MAX_STORAGE_HEADROOM=%q: %v", in, err)
+		}
+		if c.MaxStorageHeadroom != 25 {
+			t.Errorf("MaxStorageHeadroom(%q) = %d, want 25", in, c.MaxStorageHeadroom)
+		}
+	}
+}
+
+func TestMaxStorageHeadroomInvalidFailsStartup(t *testing.T) {
+	for _, in := range []string{"abc", "100%", "-1", "2.5%"} {
+		if _, err := processConfig(t, map[string]string{"MAX_STORAGE_HEADROOM": in}); err == nil {
+			t.Errorf("Process with MAX_STORAGE_HEADROOM=%q = nil error, want error", in)
+		}
+	}
+}

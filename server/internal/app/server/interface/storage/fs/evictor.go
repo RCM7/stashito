@@ -47,11 +47,13 @@ func (e *entry) mtimeFile() string {
 
 // evictor keeps an LRU index of everything under the cache root and deletes
 // the least recently used entries whenever committed plus in-flight bytes
-// would exceed max. Last access is kept in memory and flushed to the file
-// mtime at most once per touchPersistInterval so the order survives restarts.
+// would exceed max, freeing down to low so evictions come in batches. Last
+// access is kept in memory and flushed to the file mtime at most once per
+// touchPersistInterval so the order survives restarts.
 type evictor struct {
 	root string
 	max  int64
+	low  int64
 
 	mu       sync.Mutex
 	lru      *list.List
@@ -60,10 +62,11 @@ type evictor struct {
 	inflight int64
 }
 
-func newEvictor(root string, max int64) (*evictor, error) {
+func newEvictor(root string, max, headroom int64) (*evictor, error) {
 	e := &evictor{
 		root:    root,
 		max:     max,
+		low:     max - headroom,
 		lru:     list.New(),
 		entries: make(map[string]*list.Element),
 	}
@@ -76,7 +79,7 @@ func newEvictor(root string, max int64) (*evictor, error) {
 		e.entries[en.key] = e.lru.PushFront(en)
 		e.used += en.size
 	}
-	slog.Info("storage index built", "entries", len(scanned), "used_bytes", e.used, "max_bytes", max, "duration", time.Since(start))
+	slog.Info("storage index built", "entries", len(scanned), "used_bytes", e.used, "max_bytes", max, "low_bytes", e.low, "duration", time.Since(start))
 	metrics.StorageMaxBytes.Set(float64(max))
 	e.evictIfNeeded()
 	return e, nil
@@ -229,7 +232,7 @@ func (e *evictor) makeRoom(size int64) {
 		return
 	}
 	e.mu.Lock()
-	victims := e.popWhileLocked(func() bool { return e.used+e.inflight+size > e.max })
+	victims := e.popWhileLocked(e.overLocked(size))
 	used, inflight := e.used, e.inflight
 	e.mu.Unlock()
 	e.deleteVictims(victims, used, inflight)
@@ -266,10 +269,17 @@ func (e *evictor) freeDisk(dir string, need int64) int64 {
 
 func (e *evictor) evictIfNeeded() {
 	e.mu.Lock()
-	victims := e.popWhileLocked(func() bool { return e.used+e.inflight > e.max })
+	victims := e.popWhileLocked(e.overLocked(0))
 	used, inflight := e.used, e.inflight
 	e.mu.Unlock()
 	e.deleteVictims(victims, used, inflight)
+}
+
+func (e *evictor) overLocked(extra int64) func() bool {
+	if e.used+e.inflight+extra <= e.max {
+		return func() bool { return false }
+	}
+	return func() bool { return e.used+e.inflight+extra > e.low }
 }
 
 func (e *evictor) popWhileLocked(more func() bool) []*entry {
@@ -301,7 +311,7 @@ func (e *evictor) deleteVictims(victims []*entry, used, inflight int64) {
 		metrics.EvictedBytes.Add(float64(en.size))
 		slog.Debug("evicted cache entry", "type", en.kind, "key", strings.TrimPrefix(en.key, e.root), "size", en.size)
 	}
-	slog.Info("evicted cache entries", "entries", len(victims), "freed_bytes", freed, "used_bytes", used, "inflight_bytes", inflight, "max_bytes", e.max)
+	slog.Info("evicted cache entries", "entries", len(victims), "freed_bytes", freed, "used_bytes", used, "inflight_bytes", inflight, "max_bytes", e.max, "low_bytes", e.low)
 }
 
 func (e *evictor) usedBytes() int64 {

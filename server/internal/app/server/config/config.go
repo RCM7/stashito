@@ -16,7 +16,8 @@ type Config struct {
 	MetricsEnabled bool `env:"METRICS_ENABLED,default=false"`
 	MetricsPort    int  `env:"METRICS_PORT,default=0"`
 
-	MaxStorage ByteSize `env:"MAX_STORAGE"`
+	MaxStorage         ByteSize `env:"MAX_STORAGE"`
+	MaxStorageHeadroom Percent  `env:"MAX_STORAGE_HEADROOM,default=10%"`
 
 	// Upstreams is parsed from UPSTREAM_<ALIAS>_* variables via ParseUpstreams,
 	// not by envconfig.

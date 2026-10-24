@@ -16,6 +16,7 @@ optional; there are no other defaults.
 | `METRICS_ENABLED` | Optional, default `false`. `true` exposes Prometheus metrics at `GET /metrics`. |
 | `METRICS_PORT` | Optional. Serve `/metrics` on this separate port; 0/unset serves it on `PORT`. |
 | `MAX_STORAGE` | Optional. Cap on cached bytes, e.g. `500MB`, `50GB` or `2TB` (1024-based, as `df -h` reports; a bare number is bytes). Unset means unlimited. When a write would push the cache past the cap, the least recently pulled manifests and blobs are deleted first, inline, so the cap holds. |
+| `MAX_STORAGE_HEADROOM` | Optional, default `10%`. How far below `MAX_STORAGE` each eviction frees, as a whole percent of the cap (`10%` or `10`, 0 to 99). Evictions come in batches instead of one entry per write once the cache is full. `0` evicts exactly to the cap. |
 
 ## behavior
 
@@ -23,8 +24,9 @@ optional; there are no other defaults.
 - If upstream is unreachable, cached content is served stale.
 - Layers stay cached even if the image is later deleted upstream.
 - With `MAX_STORAGE` set, eviction runs inline on writes and counts bytes
-  still downloading, so concurrent pulls do not overshoot the cap. Last
-  access survives restarts (persisted to the file mtime at most once a
+  still downloading, so concurrent pulls do not overshoot the cap. A write
+  that crosses the cap frees down to the cap minus `MAX_STORAGE_HEADROOM`,
+  so disk use moves between those two marks. Last access survives restarts (persisted to the file mtime at most once a
   minute per entry). A blob larger than the cap on its own is still served
   but is the first thing the next write evicts.
 - A blob that does not fit in the free space of the storage filesystem is
