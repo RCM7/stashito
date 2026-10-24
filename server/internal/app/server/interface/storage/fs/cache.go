@@ -27,6 +27,37 @@ type CacheRepository struct {
 	root    string
 	mu      sync.Map // keyed by "host/repo/ref" to prevent concurrent fetches
 	evictor *evictor
+	disk    diskLedger
+}
+
+// diskLedger counts bytes that downloads have announced but not yet written,
+// so concurrent ReserveSize calls do not all pass on the same statfs number.
+type diskLedger struct {
+	mu      sync.Mutex
+	pending int64
+}
+
+func (l *diskLedger) claim(dir string, size int64, ev *evictor) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	free, ok := diskFree(dir)
+	if ok && free-l.pending < size {
+		free = ev.freeDisk(dir, size+l.pending)
+	}
+	if ok && free-l.pending < size {
+		return fmt.Errorf("%w: blob needs %d bytes, %d bytes free under %s", entity.ErrInsufficientStorage, size, max(free-l.pending, 0), dir)
+	}
+	l.pending += size
+	return nil
+}
+
+func (l *diskLedger) release(n int64) {
+	if n == 0 {
+		return
+	}
+	l.mu.Lock()
+	l.pending -= n
+	l.mu.Unlock()
 }
 
 func NewCacheRepository(root string) *CacheRepository {
@@ -193,74 +224,89 @@ func (c *CacheRepository) OpenBlob(registryHost string, repository string, diges
 	return f, info.Size(), nil
 }
 
-// atomicBlobWriter writes to a temp file, then renames to the final path on Close.
+// atomicBlobWriter writes to a temp file, then renames to the final path on
+// Close. booked is what it holds in the evictor's in-flight count, pending
+// what it holds in the disk ledger; both are given back on Close or Abort.
 type atomicBlobWriter struct {
 	tmpFile   *os.File
 	finalPath string
 	evictor   *evictor
+	disk      *diskLedger
 	written   int64
+	booked    int64
+	pending   int64
 	oversized bool
 }
 
 var diskFree = statfsFree
 
-// ReserveSize runs before the first byte of a download: evicts to make room
-// when a cap is set, then refuses the blob if the filesystem still cannot
-// hold it, so a pull can never fill the disk.
+// ReserveSize runs before the first byte of a download: books the announced
+// size against the cap (evicting to make room) and against the filesystem's
+// free space, then refuses the blob if the disk still cannot hold it, so a
+// pull can never fill the disk.
 func (w *atomicBlobWriter) ReserveSize(size int64) error {
-	dir := filepath.Dir(w.finalPath)
-	w.evictor.makeRoom(size)
-	free, ok := diskFree(dir)
-	if !ok {
-		return nil
+	w.book(size)
+	if err := w.disk.claim(filepath.Dir(w.finalPath), size, w.evictor); err != nil {
+		return err
 	}
-	if free < size {
-		free = w.evictor.freeDisk(dir, size)
-	}
-	if free < size {
-		return fmt.Errorf("%w: blob needs %d bytes, %d bytes free under %s", entity.ErrInsufficientStorage, size, free, dir)
-	}
+	w.pending = size
 	return nil
+}
+
+func (w *atomicBlobWriter) book(total int64) {
+	if w.oversized || total <= w.booked {
+		return
+	}
+	if !w.evictor.fits(total) {
+		w.oversized = true
+		w.evictor.release(w.booked)
+		w.booked = 0
+		slog.Warn("blob is larger than MAX_STORAGE, it will be evicted by the next write", "path", w.finalPath, "max_bytes", w.evictor.max)
+		return
+	}
+	w.evictor.reserve(total - w.booked)
+	w.booked = total
 }
 
 func (w *atomicBlobWriter) Write(p []byte) (int, error) {
 	n, err := w.tmpFile.Write(p)
-	if n > 0 && !w.oversized {
+	if n > 0 {
 		w.written += int64(n)
-		if !w.evictor.reserve(int64(n), w.written) {
-			w.oversized = true
-			slog.Warn("blob is larger than MAX_STORAGE, it will be evicted by the next write", "path", w.finalPath, "max_bytes", w.evictor.max)
-		}
+		landed := min(int64(n), w.pending)
+		w.pending -= landed
+		w.disk.release(landed)
+		w.book(w.written)
 	}
 	return n, err
 }
 
+func (w *atomicBlobWriter) settle() {
+	w.evictor.release(w.booked)
+	w.booked = 0
+	w.disk.release(w.pending)
+	w.pending = 0
+}
+
 func (w *atomicBlobWriter) Close() error {
+	defer w.settle()
 	if err := w.tmpFile.Close(); err != nil {
-		w.evictor.release(w.written)
 		return err
 	}
 	info, err := os.Stat(w.tmpFile.Name())
 	if err != nil {
-		w.evictor.release(w.written)
 		return err
 	}
 	if err := os.Rename(w.tmpFile.Name(), w.finalPath); err != nil {
-		w.evictor.release(w.written)
 		return err
 	}
-	if !w.oversized {
-		w.evictor.release(w.written)
-	}
+	w.settle()
 	w.evictor.add(w.finalPath, kindBlob, info.Size(), w.oversized)
 	return nil
 }
 
 // Abort discards the pending blob without committing it to the final path.
 func (w *atomicBlobWriter) Abort() error {
-	if !w.oversized {
-		w.evictor.release(w.written)
-	}
+	w.settle()
 	closeErr := w.tmpFile.Close()
 	removeErr := os.Remove(w.tmpFile.Name())
 	if closeErr != nil {
@@ -285,6 +331,7 @@ func (c *CacheRepository) PutBlob(registryHost string, repository string, digest
 		tmpFile:   tmpFile,
 		finalPath: filepath.Join(dir, fileName),
 		evictor:   c.evictor,
+		disk:      &c.disk,
 	}, nil
 }
 

@@ -197,45 +197,30 @@ func (e *evictor) add(key string, kind entryKind, size int64, cold bool) {
 	}
 }
 
-// reserve accounts for bytes of a blob still being downloaded. Returns false
-// once the caller's blob alone exceeds max: its bytes are then dropped from
-// the books so other writers do not empty the cache on its behalf.
-func (e *evictor) reserve(delta int64, writtenSoFar int64) bool {
-	if e == nil {
-		return true
+// fits reports whether a blob of size bytes can ever be kept under the cap.
+func (e *evictor) fits(size int64) bool {
+	return e == nil || size <= e.max
+}
+
+// reserve accounts for bytes of a blob still being downloaded, announced or
+// already written, and evicts right away if they push the cache past max.
+func (e *evictor) reserve(delta int64) {
+	if e == nil || delta == 0 {
+		return
 	}
 	e.mu.Lock()
-	if writtenSoFar > e.max {
-		e.inflight -= writtenSoFar - delta
-		e.mu.Unlock()
-		return false
-	}
 	e.inflight += delta
 	e.mu.Unlock()
 	e.evictIfNeeded()
-	return true
 }
 
-func (e *evictor) release(written int64) {
-	if e == nil {
+func (e *evictor) release(n int64) {
+	if e == nil || n == 0 {
 		return
 	}
 	e.mu.Lock()
-	e.inflight -= written
+	e.inflight -= n
 	e.mu.Unlock()
-}
-
-// makeRoom evicts ahead of a download whose size is known, so the cap is
-// met before the first byte lands instead of chunk by chunk.
-func (e *evictor) makeRoom(size int64) {
-	if e == nil || size > e.max {
-		return
-	}
-	e.mu.Lock()
-	victims := e.popWhileLocked(e.overLocked(size))
-	used, inflight := e.used, e.inflight
-	e.mu.Unlock()
-	e.deleteVictims(victims, used, inflight)
 }
 
 // freeDisk evicts one entry at a time until the filesystem under dir has at

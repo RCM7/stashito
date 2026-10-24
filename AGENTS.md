@@ -71,14 +71,15 @@ credential chain (env vars, shared config, IAM role, IRSA).
 - With `MAX_STORAGE` set, eviction runs inline on writes and counts bytes
   still downloading, so concurrent pulls do not overshoot the cap. A write
   that crosses the cap frees down to the cap minus `MAX_STORAGE_HEADROOM`,
-  so disk use moves between those two marks. Last access survives restarts (persisted to the file mtime at most once a
-  minute per entry). A blob larger than the cap on its own is still served
+  so disk use moves between those two marks. Last access survives restarts
+  (persisted to the file mtime at most once a minute per entry). A blob larger than the cap on its own is still served
   but is the first thing the next write evicts.
 - A blob that does not fit in the free space of the storage filesystem is
   refused with `507 Insufficient Storage` before any byte is written, so a
-  pull can never fill the disk. With `MAX_STORAGE` set, eviction runs first
-  and the blob is refused only if evicting everything would still not make
-  room.
+  pull can never fill the disk. Bytes announced by downloads still in flight
+  count as taken, so concurrent pulls cannot fill it together either. With
+  `MAX_STORAGE` set, eviction runs first and the blob is refused only if
+  evicting everything would still not make room.
 
 ## Verify a running instance
 

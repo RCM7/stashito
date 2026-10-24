@@ -3,9 +3,12 @@ package fs
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -313,14 +316,148 @@ func stubDiskFree(t *testing.T, root string, capacity int64) {
 	t.Cleanup(func() { diskFree = orig })
 }
 
-func reserve(t *testing.T, cache *CacheRepository, digest string, size int64) error {
+func openBlob(t *testing.T, cache *CacheRepository, digest string) *atomicBlobWriter {
 	t.Helper()
 	w, err := cache.PutBlob(testHost, testRepo, digest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = w.Abort() })
-	return w.(*atomicBlobWriter).ReserveSize(size)
+	return w.(*atomicBlobWriter)
+}
+
+func reserve(t *testing.T, cache *CacheRepository, digest string, size int64) error {
+	t.Helper()
+	return openBlob(t, cache, digest).ReserveSize(size)
+}
+
+func TestConcurrentReservationsShareDiskFree(t *testing.T) {
+	root := t.TempDir()
+	cache := NewCacheRepository(root)
+	stubDiskFree(t, root, 1000)
+
+	first := openBlob(t, cache, "sha256:first")
+	if err := first.ReserveSize(600); err != nil {
+		t.Fatalf("first ReserveSize = %v, want nil", err)
+	}
+	if err := reserve(t, cache, "sha256:second", 600); !errors.Is(err, entity.ErrInsufficientStorage) {
+		t.Fatalf("second ReserveSize while first is pending = %v, want ErrInsufficientStorage", err)
+	}
+	if err := reserve(t, cache, "sha256:small", 400); err != nil {
+		t.Fatalf("ReserveSize that fits beside the pending one = %v, want nil", err)
+	}
+	if err := first.Abort(); err != nil {
+		t.Fatal(err)
+	}
+	if err := reserve(t, cache, "sha256:third", 600); err != nil {
+		t.Fatalf("ReserveSize after Abort = %v, want nil", err)
+	}
+}
+
+func TestParallelReservationsAdmitOnlyWhatFits(t *testing.T) {
+	cache := NewCacheRepository(t.TempDir())
+	orig := diskFree
+	diskFree = func(string) (int64, bool) { return 1000, true }
+	t.Cleanup(func() { diskFree = orig })
+
+	var wg sync.WaitGroup
+	var admitted, refused atomic.Int64
+	for i := 0; i < 40; i++ {
+		w := openBlob(t, cache, fmt.Sprintf("sha256:%d", i))
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			switch err := w.ReserveSize(100); {
+			case err == nil:
+				admitted.Add(1)
+			case errors.Is(err, entity.ErrInsufficientStorage):
+				refused.Add(1)
+			default:
+				t.Errorf("ReserveSize = %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if admitted.Load() != 10 || refused.Load() != 30 {
+		t.Errorf("admitted %d refused %d, want 10 and 30", admitted.Load(), refused.Load())
+	}
+}
+
+func TestLandedBytesLeaveTheDiskLedger(t *testing.T) {
+	root := t.TempDir()
+	cache := NewCacheRepository(root)
+	stubDiskFree(t, root, 1000)
+
+	w := openBlob(t, cache, "sha256:a")
+	if err := w.ReserveSize(600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write(bytes.Repeat([]byte("x"), 600)); err != nil {
+		t.Fatal(err)
+	}
+	if err := reserve(t, cache, "sha256:b", 400); err != nil {
+		t.Fatalf("ReserveSize after the pending bytes landed = %v, want nil", err)
+	}
+	if err := reserve(t, cache, "sha256:c", 1); !errors.Is(err, entity.ErrInsufficientStorage) {
+		t.Fatalf("ReserveSize beyond landed plus pending = %v, want ErrInsufficientStorage", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestReserveSizeBooksAnnouncedBytesAgainstCap(t *testing.T) {
+	cache := cappedCache(t, 250)
+	putBlob(t, cache, "sha256:a", 100)
+	putBlob(t, cache, "sha256:b", 100)
+
+	c := openBlob(t, cache, "sha256:c")
+	if err := c.ReserveSize(100); err != nil {
+		t.Fatal(err)
+	}
+	assertBlob(t, cache, "sha256:a", false)
+	assertBlob(t, cache, "sha256:b", true)
+
+	d := openBlob(t, cache, "sha256:d")
+	if err := d.ReserveSize(100); err != nil {
+		t.Fatal(err)
+	}
+	assertBlob(t, cache, "sha256:b", false)
+
+	for _, w := range []*atomicBlobWriter{c, d} {
+		if _, err := w.Write(bytes.Repeat([]byte("x"), 100)); err != nil {
+			t.Fatal(err)
+		}
+		if err := w.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if used := cache.UsedBytes(); used != 200 {
+		t.Errorf("UsedBytes = %d, want 200", used)
+	}
+}
+
+func TestReserveSizeLargerThanCapIsOversizedUpFront(t *testing.T) {
+	cache := cappedCache(t, 250)
+	putBlob(t, cache, "sha256:small", 100)
+
+	w := openBlob(t, cache, "sha256:huge")
+	if err := w.ReserveSize(300); err != nil {
+		t.Fatal(err)
+	}
+	assertBlob(t, cache, "sha256:small", true)
+	if _, err := w.Write(bytes.Repeat([]byte("x"), 300)); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	assertBlob(t, cache, "sha256:small", true)
+	assertBlob(t, cache, "sha256:huge", true)
+
+	putBlob(t, cache, "sha256:next", 100)
+	assertBlob(t, cache, "sha256:huge", false)
+	assertBlob(t, cache, "sha256:small", true)
 }
 
 func TestReserveSizeRefusesBlobThatDoesNotFitOnDisk(t *testing.T) {
