@@ -57,6 +57,15 @@ docker run -d --name stashito -p 8080:8080 \
   rcm7/stashito:0
 ```
 
+On Kubernetes, with the Helm chart:
+
+```sh
+helm repo add stashito https://stashito.com/helm-charts
+helm install stashito stashito/stashito
+```
+
+Values and node mirror setup: https://stashito.com/docs/kubernetes.
+
 ```sh
 docker pull localhost:8080/dockerhub/library/postgres:16
 ```

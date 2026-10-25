@@ -1,0 +1,8 @@
+Stashito is listening on {{ include "stashito.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}.
+
+Check it:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "stashito.fullname" . }} 8080:{{ .Values.service.port }}
+  curl http://localhost:8080/healthz
+
+Pull through it:
+  docker pull localhost:8080/{{ (first .Values.upstreams).alias | lower }}/library/alpine:latest

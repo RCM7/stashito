@@ -49,6 +49,10 @@ volumes:
   stashito_data:
 ```
 
+On Kubernetes: `helm repo add stashito https://stashito.com/helm-charts`,
+then `helm install stashito stashito/stashito`. See
+https://stashito.com/docs/kubernetes.
+
 ```sh
 docker pull localhost:8080/dockerhub/library/postgres:16
 ```

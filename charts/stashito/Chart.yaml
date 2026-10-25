@@ -1,0 +1,17 @@
+apiVersion: v2
+name: stashito
+description: Pull-through cache for Docker and OCI images
+type: application
+version: 0.0.0
+appVersion: "0"
+home: https://stashito.com
+icon: https://stashito.com/docs/logo.svg
+sources:
+  - https://github.com/RCM7/stashito
+keywords:
+  - registry
+  - pull-through-cache
+  - registry-mirror
+  - docker
+  - oci
+license: AGPL-3.0-only

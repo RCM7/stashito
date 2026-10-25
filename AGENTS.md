@@ -28,6 +28,10 @@ volumes:
   stashito_data:
 ```
 
+Kubernetes: Helm chart in `charts/stashito`, published at
+`https://stashito.com/helm-charts` with one chart version per release
+(chart `version` and `appVersion` are set at release time).
+
 ## Pull through it
 
 ```sh
@@ -137,8 +141,9 @@ Do NOT include "Co-Authored-By" lines or attribution in commit messages.
 
 Every new feature ships with a pass over the public surfaces in the same
 change: docs/ (the VitePress site served at stashito.com/docs), README.md,
-and the Docker Hub description (source in server/docker/DOCKERHUB.md, rendered
-and pushed to hub.docker.com by CI on every release). The landing page and llms.txt are maintained
+the Docker Hub description (source in server/docker/DOCKERHUB.md, rendered
+and pushed to hub.docker.com by CI on every release), and the Helm chart in
+charts/stashito when the feature adds or changes an env var. The landing page and llms.txt are maintained
 outside this repo; automated CI builds docs/ from here and deploys the full
 site (landing plus /docs) to stashito.com.
 

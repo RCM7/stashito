@@ -1,0 +1,27 @@
+upstreams:
+  - alias: dockerhub
+    host: registry-1.docker.io
+    username: someone
+    password: token
+  - alias: ghcr
+    host: ghcr.io
+    existingSecret: ghcr-creds
+  - alias: quay
+    host: quay.io
+mirrorUpstream: dockerhub
+maxStorage: 50GB
+maxStorageHeadroom: "15%"
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+ingress:
+  enabled: true
+  className: nginx
+service:
+  type: NodePort
+  nodePort: 30500
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi

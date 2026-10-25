@@ -27,6 +27,7 @@ export default defineConfig({
           { text: 'quickstart', link: '/quickstart' },
           { text: 'configuration', link: '/configuration' },
           { text: 'registries', link: '/registries' },
+          { text: 'kubernetes', link: '/kubernetes' },
           { text: 'api', link: '/api' },
           { text: 'observability', link: '/observability' }
         ]

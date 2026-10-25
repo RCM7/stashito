@@ -1,0 +1,151 @@
+{{- $aliases := list }}
+{{- range .Values.upstreams }}
+{{- $aliases = append $aliases (required "every upstream needs an alias" .alias | lower) }}
+{{- end }}
+{{- if not $aliases }}
+{{- fail "upstreams needs at least one entry" }}
+{{- end }}
+{{- if and .Values.mirrorUpstream (not (has (lower .Values.mirrorUpstream) $aliases)) }}
+{{- fail (printf "mirrorUpstream %q is not one of the upstream aliases" .Values.mirrorUpstream) }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stashito.fullname" . }}
+  labels:
+    {{- include "stashito.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "stashito.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "stashito.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "stashito.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: stashito
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: PORT
+              value: "8080"
+            - name: STORAGE_PATH
+              value: /data/stashito
+            - name: LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            - name: LOG_FORMAT
+              value: {{ .Values.logFormat | quote }}
+            - name: TAG_TTL
+              value: {{ .Values.tagTTL | quote }}
+            {{- range .Values.upstreams }}
+            {{- $alias := include "stashito.envAlias" .alias }}
+            - name: UPSTREAM_{{ $alias }}_HOST
+              value: {{ required (printf "upstreams[%s].host is required" .alias) .host | quote }}
+            {{- if .existingSecret }}
+            - name: UPSTREAM_{{ $alias }}_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .existingSecret }}
+                  key: username
+            - name: UPSTREAM_{{ $alias }}_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .existingSecret }}
+                  key: password
+            {{- end }}
+            {{- end }}
+            {{- with .Values.mirrorUpstream }}
+            - name: MIRROR_UPSTREAM
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.maxStorage }}
+            - name: MAX_STORAGE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.maxStorageHeadroom }}
+            - name: MAX_STORAGE_HEADROOM
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if .Values.metrics.enabled }}
+            - name: METRICS_ENABLED
+              value: "true"
+            - name: METRICS_PORT
+              value: {{ .Values.metrics.port | quote }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if include "stashito.inlineCredentials" . }}
+          envFrom:
+            - secretRef:
+                name: {{ include "stashito.fullname" . }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            {{- if .Values.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /v2/
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          volumeMounts:
+            - name: data
+              mountPath: /data/stashito
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "stashito.claimName" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
