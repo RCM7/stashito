@@ -4,7 +4,8 @@ Pull-through cache for Docker/OCI images. A caching registry proxy: implements
 the OCI Distribution Spec, sits between clients and upstream registries
 (Docker Hub, GHCR, Quay, Google Artifact Registry, Azure ACR, AWS ECR),
 stores every manifest and blob it fetches on local disk, and serves later
-pulls from that cache. Ships as the Docker image `rcm7/stashito`.
+pulls from that cache. Ships as the Docker image `rcm7/stashito` and as
+static linux binaries attached to each GitHub release with `checksums.txt`.
 
 ## Run
 

@@ -7,7 +7,8 @@ and blob it fetches on local disk and serves later pulls from that cache.
 
 It implements the OCI Distribution Spec — the same HTTP API every registry
 speaks — so docker, containerd and podman pull through it unchanged. It ships
-as a single Go binary, distributed as the Docker image `rcm7/stashito`.
+as a single Go binary, distributed as the Docker image `rcm7/stashito` and
+as a [release binary](/binary).
 
 ## why run it
 

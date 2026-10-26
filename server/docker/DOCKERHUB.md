@@ -24,8 +24,7 @@ Every merge to master is a release. `0` and `latest` track the newest one,
 `0.3` and `0.3.1` pin one. Older releases stay pullable at their `X.Y.Z` tag;
 the list is at https://github.com/RCM7/stashito/releases. Each tag is a
 manifest list for `linux/amd64`, `linux/arm64`, `linux/arm/v7`,
-`linux/arm/v6`, `linux/386`, `linux/ppc64le`, `linux/s390x` and
-`linux/riscv64`.
+`linux/arm/v6` and `linux/386`.
 
 ## Run it
 
