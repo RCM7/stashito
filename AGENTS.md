@@ -5,7 +5,9 @@ the OCI Distribution Spec, sits between clients and upstream registries
 (Docker Hub, GHCR, Quay, Google Artifact Registry, Azure ACR, AWS ECR),
 stores every manifest and blob it fetches on local disk, and serves later
 pulls from that cache. Ships as the Docker image `rcm7/stashito` and as
-static linux binaries attached to each GitHub release with `checksums.txt`.
+static linux binaries plus signed .deb, .rpm and Arch packages attached to each
+GitHub release with `checksums.txt` (built by `.goreleaser.yaml`). The apt, dnf
+and pacman repositories at stashito.com/packages serve the latest release.
 
 ## Run
 

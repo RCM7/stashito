@@ -1,0 +1,122 @@
+version: 2
+
+project_name: stashito
+
+builds:
+  - id: stashito
+    dir: server
+    main: .
+    binary: stashito
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+      - arm
+      - "386"
+    goarm:
+      - "7"
+  - id: stashito-armv6
+    dir: server
+    main: .
+    binary: stashito
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos:
+      - linux
+    goarch:
+      - arm
+    goarm:
+      - "6"
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}{{ with .Arm }}v{{ . }}{{ end }}"
+    files:
+      - LICENSE
+      - README.md
+      - packaging/stashito.service
+      - packaging/stashito.env
+
+checksum:
+  disable: true
+
+changelog:
+  disable: true
+
+nfpms:
+  - package_name: stashito
+    ids:
+      - stashito
+    file_name_template: "{{ .ConventionalFileName }}"
+    homepage: https://stashito.com
+    maintainer: Ricardo Marques <rcm7@fuzik.one>
+    description: Pull-through cache for Docker and OCI images
+    license: AGPL-3.0-only
+    formats:
+      - deb
+      - rpm
+      - archlinux
+    bindir: /usr/bin
+    contents:
+      - src: packaging/stashito.service
+        dst: /usr/lib/systemd/system/stashito.service
+        file_info:
+          mode: 0644
+      - src: packaging/stashito.env
+        dst: /etc/stashito.env
+        type: config|noreplace
+        file_info:
+          mode: 0644
+    scripts:
+      postinstall: packaging/postinstall.sh
+    rpm:
+      signature:
+        key_file: "{{ .Env.GPG_KEY_FILE }}"
+    archlinux:
+      packager: Ricardo Marques <rcm7@fuzik.one>
+
+signs:
+  - artifacts: package
+
+aurs:
+  - name: stashito-bin
+    skip_upload: true
+    homepage: https://stashito.com
+    description: Pull-through cache for Docker and OCI images
+    maintainers:
+      - Ricardo Marques <rcm7 at fuzik dot one>
+    license: AGPL-3.0-only
+    private_key: "{{ .Env.AUR_KEY }}"
+    git_url: ssh://aur@aur.archlinux.org/stashito-bin.git
+    provides:
+      - stashito
+    conflicts:
+      - stashito
+    backup:
+      - etc/stashito.env
+    commit_author:
+      name: Ricardo Marques
+      email: rcm7@fuzik.one
+    package: |-
+      install -Dm755 ./stashito "${pkgdir}/usr/bin/stashito"
+      install -Dm644 ./packaging/stashito.service "${pkgdir}/usr/lib/systemd/system/stashito.service"
+      install -Dm644 ./packaging/stashito.env "${pkgdir}/etc/stashito.env"
+      install -Dm644 ./LICENSE "${pkgdir}/usr/share/licenses/stashito/LICENSE"
+
+release:
+  github:
+    owner: RCM7
+    name: stashito
+  mode: keep-existing
+  replace_existing_artifacts: true

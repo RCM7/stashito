@@ -2,7 +2,9 @@
 
 Every release attaches a static `stashito` binary for `linux/amd64`,
 `linux/arm64`, `linux/arm/v7`, `linux/arm/v6` and `linux/386`, plus
-`checksums.txt` with the sha256 of every release file.
+`checksums.txt` with the sha256 of every release file. On Debian, Ubuntu,
+Fedora, RHEL or Arch, the [packages](/packages) are simpler.
+
 
 ## download and verify
 

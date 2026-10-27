@@ -40,8 +40,10 @@ volumes:
 
 The image is published for `linux/amd64`, `linux/arm64`, `linux/arm/v7`,
 `linux/arm/v6` and `linux/386`; docker picks the one matching the host.
-Each release also attaches a static binary per platform and
-`checksums.txt`, see [binary](https://stashito.com/docs/binary).
+Debian, Ubuntu, Fedora, RHEL and Arch install from signed package
+repositories, see [packages](https://stashito.com/docs/packages). Each release
+also attaches a static binary per platform and `checksums.txt`, see
+[binary](https://stashito.com/docs/binary).
 
 Every merge to master is a release. `0` and `latest` track the newest one,
 `0.3` and `0.3.1` pin one. Releases are listed at

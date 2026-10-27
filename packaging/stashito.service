@@ -1,0 +1,15 @@
+[Unit]
+Description=Stashito
+Documentation=https://stashito.com/docs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/stashito.env
+ExecStart=/usr/bin/stashito
+DynamicUser=yes
+StateDirectory=stashito
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

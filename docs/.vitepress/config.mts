@@ -28,6 +28,7 @@ export default defineConfig({
           { text: 'configuration', link: '/configuration' },
           { text: 'registries', link: '/registries' },
           { text: 'kubernetes', link: '/kubernetes' },
+          { text: 'packages', link: '/packages' },
           { text: 'binary', link: '/binary' },
           { text: 'api', link: '/api' },
           { text: 'observability', link: '/observability' }
